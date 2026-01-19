@@ -1,15 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'login.dart';
 import 'inicio.dart';
-import 'firebase_options.dart';
 
-void main() async {
+void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  // Aquí ya no inicializamos Firebase
   runApp(const MyApp());
 }
 
@@ -19,28 +13,14 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'KTOOLS Inventory',
+      title: 'KTOOLS Inventory Local',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         primaryColor: Colors.lightBlue,
         scaffoldBackgroundColor: Colors.white,
+        useMaterial3: true,
       ),
-      home: StreamBuilder<User?>(
-        stream: FirebaseAuth.instance.authStateChanges(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-
-          if (snapshot.hasData) {
-            // Usuario autenticado
-            return const Inicio();
-          } else {
-            // No autenticado
-            return const Login();
-          }
-        },
-      ),
+      home: const Inicio(), // Va directo al Inicio, sin Login
     );
   }
 }

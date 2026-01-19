@@ -1,5 +1,6 @@
 class Producto {
-  String id;
+  int? id; // ID interno de base de datos
+  String codigo; // Código de barras
   String factura;
   String descripcion;
   String marca;
@@ -10,7 +11,8 @@ class Producto {
   bool borrado;
 
   Producto({
-    required this.id,
+    this.id,
+    required this.codigo,
     required this.factura,
     required this.descripcion,
     required this.marca,
@@ -21,22 +23,25 @@ class Producto {
     required this.borrado,
   });
 
-  factory Producto.desdeMapa(Map<String, dynamic> data, String documentId) {
+  factory Producto.desdeMapa(Map<String, dynamic> map) {
     return Producto(
-      id: documentId,
-      factura: data['factura'] ?? '',
-      descripcion: data['descripcion'] ?? '',
-      marca: data['marca'] ?? '',
-      costo: (data['costo'] as num?)?.toDouble() ?? 0.0,
-      precio: (data['precio'] as num?)?.toDouble() ?? 0.0,
-      precioRappi: (data['precioRappi'] as num?)?.toDouble() ?? 0.0,
-      stock: (data['stock'] as num?)?.toInt() ?? 0,
-      borrado: data['borrado'] ?? false,
+      id: map['id'],
+      codigo: map['codigo'] ?? '',
+      factura: map['factura'] ?? '',
+      descripcion: map['descripcion'] ?? '',
+      marca: map['marca'] ?? '',
+      costo: map['costo'] ?? 0.0,
+      precio: map['precio'] ?? 0.0,
+      precioRappi: map['precioRappi'] ?? 0.0,
+      stock: map['stock'] ?? 0,
+      borrado: (map['borrado'] == 1), // SQLite usa 1/0 para bool
     );
   }
 
   Map<String, dynamic> aMapa() {
     return {
+      'id': id,
+      'codigo': codigo,
       'factura': factura,
       'descripcion': descripcion,
       'marca': marca,
@@ -44,7 +49,7 @@ class Producto {
       'precio': precio,
       'precioRappi': precioRappi,
       'stock': stock,
-      'borrado': borrado,
+      'borrado': borrado ? 1 : 0,
     };
   }
 }

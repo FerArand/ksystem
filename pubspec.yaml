@@ -1,7 +1,7 @@
 name: ksystem
-description: "Sistema de inventarios de Ktools"
+description: "Sistema de inventarios de Ktools Local"
 publish_to: "none"
-version: 1.0.0+1
+version: 2.0.0
 
 environment:
   sdk: ">=3.0.0 <4.0.0"
@@ -9,10 +9,13 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  firebase_core: ^4.2.1
-  firebase_auth: ^6.1.2
-  cloud_firestore: ^6.1.0
-  google_sign_in: ^7.2.0
+  # Base de datos local
+  sqflite_common_ffi: ^2.3.0 # Necesario para Windows/Linux/Mac
+  sqflite: ^2.3.0
+  path: ^1.8.3
+  path_provider: ^2.1.1
+  # Utilidades
+  intl: ^0.18.1
   file_picker: ^5.0.0
   excel: ^4.0.6
   cupertino_icons: ^1.0.2

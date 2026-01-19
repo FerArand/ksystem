@@ -1,17 +1,17 @@
-{
-  "hosting": {
-    "site": "ksystem-b7efb",
-    "public": "build/web",
-    "ignore": [
-      "firebase.json",
-      "**/.*",
-      "**/node_modules/**"
-    ],
-    "rewrites": [
-      {
-        "source": "**",
-        "destination": "/index.html"
-      }
-    ]
-  }
-}
+//{
+//  "hosting": {
+//    "site": "ksystem-b7efb",
+//    "public": "build/web",
+//    "ignore": [
+//      "firebase.json",
+//      "**/.*",
+//      "**/node_modules/**"
+//    ],
+//    "rewrites": [
+//      {
+//        "source": "**",
+//        "destination": "/index.html"
+//      }
+//    ]
+//  }
+//}
