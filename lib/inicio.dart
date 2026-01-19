@@ -107,17 +107,10 @@ class _InicioState extends State<Inicio> {
             double precioRappi = double.parse((precio * 1.35).toStringAsFixed(2));
 
             // GENERACIÓN DE CÓDIGO
-            // Si el Excel tiene columna código (digamos col 5) úsala, si no, usa la factura.
-            // Si no hay factura, usa la descripción (no ideal, pero evita vacíos).
-            String codigo = '';
-            // Verificamos si hay una columna extra para código (tu nuevo excel exportado la tendrá en la col 0, pero el viejo no)
-            // Asumiremos lógica de Excel Viejo: Usar Factura como Código
-            if (factura.isNotEmpty) {
-              codigo = factura;
-            } else {
-              // Generar un código temporal si no hay factura
-              codigo = "GEN-${DateTime.now().millisecondsSinceEpoch}-$r";
-            }
+            // CORRECCIÓN: NO usar factura como código.
+            // Generamos un código interno único para que no choque en la BD.
+            // Cuando vincules el producto, este código se reemplazará por el real.
+            String codigo = "NO_CODIGO_${DateTime.now().millisecondsSinceEpoch}_$r";
 
             Map<String, dynamic> productoMap = {
               'codigo': codigo,
@@ -128,7 +121,7 @@ class _InicioState extends State<Inicio> {
               'precio': precio,
               'precioRappi': precioRappi,
               'stock': stock,
-              'borrado': 0, // 0 = false en SQLite
+              'borrado': 0,
             };
 
             // Insertar en BD (ConflictAlgorithm.replace reemplaza si ya existe el código/ID)
@@ -150,44 +143,55 @@ class _InicioState extends State<Inicio> {
     }
   }
 
-  // ------------------------------------------
-  // EXPORTAR A EXCEL (CON CÓDIGO DE BARRAS)
+// ------------------------------------------
+  // EXPORTAR A EXCEL (CON AUTO-AJUSTE Y SIN DEPENDENCIAS)
   // ------------------------------------------
   Future<void> _exportarExcel() async {
     setState(() => _importando = true);
 
     try {
-      // 1. Obtener datos
       final db = await DBHelper.instance.database;
       final List<Map<String, dynamic>> maps = await db.query('productos');
       List<Producto> productos = List.generate(maps.length, (i) => Producto.desdeMapa(maps[i]));
 
-      // 2. Crear Excel
       var excel = Excel.createExcel();
       String sheetName = 'Inventario';
       Sheet sheetObject = excel[sheetName];
       excel.setDefaultSheet(sheetName);
 
-      // 3. Encabezados
-      List<CellValue> headers = [
-        TextCellValue('Código'),       // A
-        TextCellValue('Factura'),      // B
-        TextCellValue('Marca'),        // C
-        TextCellValue('Descripción'),  // D
-        TextCellValue('Costo'),        // E
-        TextCellValue('Precio Público'),// F
-        TextCellValue('Precio Rappi'), // G
-        TextCellValue('Stock'),        // H
-      ];
+      // --- LÓGICA DE AUTO-ANCHO ---
+      Map<int, double> anchosColumnas = {
+        0: 15.0, 1: 10.0, 2: 15.0, 3: 30.0, 4: 10.0, 5: 12.0, 6: 12.0, 7: 8.0,
+      };
+
+      void checkWidth(int colIndex, String text) {
+        double anchoEstimado = text.length * 1.2;
+        if (anchoEstimado < 8) anchoEstimado = 8;
+        if (anchosColumnas[colIndex] == null || anchoEstimado > anchosColumnas[colIndex]!) {
+          anchosColumnas[colIndex] = anchoEstimado;
+        }
+      }
+
+      List<String> titulos = ['Código', 'Factura', 'Marca', 'Descripción', 'Costo', 'Precio Público', 'Precio Rappi', 'Stock'];
+      List<CellValue> headers = titulos.map((e) => TextCellValue(e)).toList();
       sheetObject.appendRow(headers);
 
-      // 4. Llenar filas
       for (var p in productos) {
+        String vCodigo = p.codigo;
+        String vFactura = p.factura;
+        String vMarca = p.marca;
+        String vDesc = p.descripcion;
+
+        checkWidth(0, vCodigo);
+        checkWidth(1, vFactura);
+        checkWidth(2, vMarca);
+        checkWidth(3, vDesc);
+
         List<CellValue> row = [
-          TextCellValue(p.codigo),
-          TextCellValue(p.factura),
-          TextCellValue(p.marca),
-          TextCellValue(p.descripcion),
+          TextCellValue(vCodigo),
+          TextCellValue(vFactura),
+          TextCellValue(vMarca),
+          TextCellValue(vDesc),
           DoubleCellValue(p.costo),
           DoubleCellValue(p.precio),
           DoubleCellValue(p.precioRappi),
@@ -196,7 +200,12 @@ class _InicioState extends State<Inicio> {
         sheetObject.appendRow(row);
       }
 
-      // 5. Guardar
+      for (int i = 0; i < 8; i++) {
+        double anchoFinal = anchosColumnas[i] ?? 10.0;
+        if (anchoFinal > 60) anchoFinal = 60;
+        sheetObject.setColumnWidth(i, anchoFinal);
+      }
+
       Directory? directory;
       if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
         directory = await getDownloadsDirectory();
@@ -212,13 +221,20 @@ class _InicioState extends State<Inicio> {
           ..createSync(recursive: true)
           ..writeAsBytesSync(fileBytes);
 
+        // ÉXITO: Usamos SnackBar estándar
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Exportado en: $filePath')),
+          SnackBar(content: Text('Exportado exitosamente en: $filePath')),
         );
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error al exportar: $e')),
+      // ERROR: Usamos Dialog directo sin depender de función externa
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text("Error al Exportar"),
+          content: SingleChildScrollView(child: Text(e.toString())),
+          actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("OK"))],
+        ),
       );
     } finally {
       setState(() => _importando = false);

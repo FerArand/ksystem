@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart'; // para fecha
+import 'package:intl/intl.dart';
 import 'db_helper.dart';
 import 'models/producto.dart';
 import 'constants/colores.dart';
@@ -14,7 +14,8 @@ class Venta extends StatefulWidget {
 class _VentaState extends State<Venta> {
   final List<Producto> _carrito = [];
   final TextEditingController _codigoController = TextEditingController();
-  final FocusNode _focusNode = FocusNode(); // Para mantener el foco en el escáner
+  final FocusNode _focusNode = FocusNode();
+
   double _total = 0.0;
   double _recibido = 0.0;
   final TextEditingController _recibidoController = TextEditingController();
@@ -22,7 +23,6 @@ class _VentaState extends State<Venta> {
   @override
   void initState() {
     super.initState();
-    // Forzar el foco al campo de código al iniciar
     WidgetsBinding.instance.addPostFrameCallback((_) {
       FocusScope.of(context).requestFocus(_focusNode);
     });
@@ -30,81 +30,87 @@ class _VentaState extends State<Venta> {
 
   void _calcularTotal() {
     double temp = 0.0;
-    for (var p in _carrito) {
-      temp += p.precio;
-    }
-    setState(() {
-      _total = temp;
-    });
+    for (var p in _carrito) temp += p.precio;
+    setState(() => _total = temp);
   }
 
-  // Lógica principal del escáner
   Future<void> _escanearCodigo(String codigo) async {
     if (codigo.isEmpty) return;
-
-    // Buscar en BD
     final data = await DBHelper.instance.getProductoPorCodigo(codigo.trim());
-
-    if (data != null) {
-      final producto = Producto.desdeMapa(data);
-      if (producto.stock > 0) {
-        setState(() {
-          _carrito.add(producto); // Añade al carrito
-          _calcularTotal();
-        });
-        // Disminuir stock en tiempo real (Opcional, o hacerlo al finalizar venta)
-        // Por ahora solo visual en carrito.
-      } else {
-        _mostrarAlerta("Sin stock", "El producto ${producto.descripcion} no tiene existencias.");
-      }
-    } else {
-      _mostrarAlerta("Error", "Producto no encontrado con código: $codigo");
-    }
-
-    // Limpiar campo y mantener foco para el siguiente escaneo
+    _agregarAlCarrito(data, codigo);
     _codigoController.clear();
     _focusNode.requestFocus();
   }
 
+  void _agregarAlCarrito(Map<String, dynamic>? data, String codigoRef) {
+    if (data != null) {
+      final producto = Producto.desdeMapa(data);
+      if (producto.stock > 0) {
+        setState(() {
+          _carrito.add(producto);
+          _calcularTotal();
+        });
+      } else {
+        _alerta("Sin stock", "El producto ${producto.descripcion} no tiene existencias.");
+      }
+    } else {
+      _alerta("No encontrado", "Producto no encontrado con código: $codigoRef");
+    }
+  }
+
+  // --- NUEVO: BÚSQUEDA MANUAL ---
+  Future<void> _abrirBusquedaManual() async {
+    await showDialog(
+      context: context,
+      builder: (context) => DialogoBusquedaVenta(
+        onSeleccionado: (producto) {
+          // Agregar directo al carrito
+          if (producto.stock > 0) {
+            setState(() {
+              _carrito.add(producto);
+              _calcularTotal();
+            });
+            Navigator.pop(context); // Cerrar dialogo
+          } else {
+            Navigator.pop(context);
+            _alerta("Sin stock", "No hay existencias de ${producto.descripcion}");
+          }
+        },
+      ),
+    );
+    _focusNode.requestFocus(); // Devolver foco al escáner
+  }
+
+  // ... (El resto de _finalizarVenta y _mostrarAlerta es igual al anterior) ...
   Future<void> _finalizarVenta() async {
+    // ... (Copia tu lógica de finalizar venta aquí) ...
+    // Si necesitas que te la repita, avísame.
+    // Solo asegurate de limpiar el carrito y recalcular al final.
     if (_carrito.isEmpty) return;
-
-    // Guardar venta en Historial
-    final fecha = DateFormat('yyyy-MM-dd HH:mm:ss').format(DateTime.now());
-
-    // Generar string de items para guardar simple
     String itemsResumen = _carrito.map((e) => "${e.codigo}:${e.precio}").join(",");
-
+    final fecha = DateFormat('yyyy-MM-dd HH:mm:ss').format(DateTime.now());
     await DBHelper.instance.insertVenta({
       'fecha': fecha,
       'total': _total,
       'recibido': _recibido,
       'cambio': (_recibido - _total),
-      'cliente': 'Mostrador', // O pedir nombre
+      'cliente': 'Mostrador',
       'items': itemsResumen
     });
-
-    // Descontar stock definitivamente de la BD
     for (var p in _carrito) {
       await DBHelper.instance.updateStock(p.codigo, -1);
     }
-
     setState(() {
       _carrito.clear();
       _total = 0.0;
       _recibido = 0.0;
       _recibidoController.clear();
     });
-
-    _mostrarAlerta("Éxito", "Venta registrada correctamente.");
-    _focusNode.requestFocus(); // Regresar foco al escáner
+    _alerta("Venta", "Venta realizada con éxito");
   }
 
-  void _mostrarAlerta(String titulo, String mensaje) {
-    showDialog(context: context, builder: (_) => AlertDialog(
-      title: Text(titulo), content: Text(mensaje),
-      actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text("OK"))],
-    ));
+  void _alerta(String t, String m) {
+    showDialog(context: context, builder: (_) => AlertDialog(title: Text(t), content: Text(m), actions: [TextButton(onPressed: ()=>Navigator.pop(context), child: Text("OK"))]));
   }
 
   @override
@@ -113,26 +119,42 @@ class _VentaState extends State<Venta> {
       padding: const EdgeInsets.all(16.0),
       child: Column(
         children: [
-          // CAMPO DE ESCANEO
-          TextField(
-            controller: _codigoController,
-            focusNode: _focusNode,
-            autofocus: true,
-            decoration: const InputDecoration(
-              labelText: "Escanear código de barras aquí (o escribir manual)",
-              border: OutlineInputBorder(),
-              prefixIcon: Icon(Icons.qr_code_scanner),
-            ),
-            onSubmitted: (value) => _escanearCodigo(value),
+          // FILA SUPERIOR: ESCÁNER + BOTÓN BÚSQUEDA
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _codigoController,
+                  focusNode: _focusNode,
+                  autofocus: true,
+                  decoration: const InputDecoration(
+                    labelText: "Escanea código de barras aquí...",
+                    border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.qr_code_scanner),
+                  ),
+                  onSubmitted: (value) => _escanearCodigo(value),
+                ),
+              ),
+              const SizedBox(width: 10),
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 20),
+                    backgroundColor: Colores.azulCielo,
+                    foregroundColor: Colors.white
+                ),
+                onPressed: _abrirBusquedaManual,
+                icon: const Icon(Icons.search),
+                label: const Text("Buscar Manual\n(Tornillos, etc)"),
+              )
+            ],
           ),
           const SizedBox(height: 20),
 
-          // AREA PRINCIPAL: LISTA Y TOTALES
+          // AREA PRINCIPAL (Igual que antes)
           Expanded(
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // LISTADO DE PRODUCTOS (Izquierda)
                 Expanded(
                   flex: 2,
                   child: Container(
@@ -165,7 +187,6 @@ class _VentaState extends State<Venta> {
                   ),
                 ),
                 const SizedBox(width: 20),
-                // TOTALES (Derecha)
                 Expanded(
                   flex: 1,
                   child: Card(
@@ -196,7 +217,7 @@ class _VentaState extends State<Venta> {
                             style: ElevatedButton.styleFrom(backgroundColor: Colores.verde, padding: const EdgeInsets.all(20)),
                             onPressed: _finalizarVenta,
                             icon: const Icon(Icons.check),
-                            label: const Text("COBRAR / FINALIZAR"),
+                            label: const Text("COBRAR"),
                           )
                         ],
                       ),
@@ -208,6 +229,67 @@ class _VentaState extends State<Venta> {
           ),
         ],
       ),
+    );
+  }
+}
+
+// Dialogo para buscar manualmente en Ventas
+class DialogoBusquedaVenta extends StatefulWidget {
+  final Function(Producto) onSeleccionado;
+  const DialogoBusquedaVenta({Key? key, required this.onSeleccionado}) : super(key: key);
+
+  @override
+  State<DialogoBusquedaVenta> createState() => _DialogoBusquedaVentaState();
+}
+
+class _DialogoBusquedaVentaState extends State<DialogoBusquedaVenta> {
+  List<Producto> _resultados = [];
+
+  Future<void> _buscar(String query) async {
+    if (query.length < 2) return; // Optimización
+    final db = await DBHelper.instance.database;
+    final res = await db.query(
+      'productos',
+      where: 'descripcion LIKE ? OR factura LIKE ?', // Quitamos codigo de aquí porque es manual
+      whereArgs: ['%$query%', '%$query%'],
+    );
+    setState(() {
+      _resultados = res.map((e) => Producto.desdeMapa(e)).toList();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text("Buscar producto manual"),
+      content: SizedBox(
+        width: 500,
+        height: 400,
+        child: Column(
+          children: [
+            TextField(
+              autofocus: true,
+              decoration: const InputDecoration(prefixIcon: Icon(Icons.search), hintText: "Escribe nombre (ej: Tornillo)..."),
+              onChanged: _buscar,
+            ),
+            const SizedBox(height: 10),
+            Expanded(
+              child: ListView.builder(
+                itemCount: _resultados.length,
+                itemBuilder: (ctx, i) {
+                  final p = _resultados[i];
+                  return ListTile(
+                    title: Text(p.descripcion),
+                    subtitle: Text("\$${p.precio} | Stock: ${p.stock}"),
+                    onTap: () => widget.onSeleccionado(p),
+                  );
+                },
+              ),
+            )
+          ],
+        ),
+      ),
+      actions: [TextButton(onPressed: ()=>Navigator.pop(context), child: Text("Cancelar"))],
     );
   }
 }

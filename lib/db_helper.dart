@@ -124,4 +124,16 @@ class DBHelper {
     final db = await database;
     return await db.insert('ventas', row);
   }
+  // --- VINCULACIÓN Y ACTUALIZACIONES ---
+
+  // Reemplaza el código temporal por el código de barras real escaneado
+  Future<int> vincularCodigo(int idProducto, String nuevoCodigo) async {
+    final db = await database;
+    return await db.update(
+      'productos',
+      {'codigo': nuevoCodigo},
+      where: 'id = ?',
+      whereArgs: [idProducto],
+    );
+  }
 }
