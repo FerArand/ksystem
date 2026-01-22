@@ -11,7 +11,6 @@ class DBHelper {
 
   Future<Database> get database async {
     if (_database != null) return _database!;
-    // Inicializar ffi para escritorio (Windows/Linux)
     if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
       sqfliteFfiInit();
       databaseFactory = databaseFactoryFfi;
@@ -23,16 +22,16 @@ class DBHelper {
   Future<Database> _initDB(String filePath) async {
     final dbPath = await getApplicationDocumentsDirectory();
     final path = join(dbPath.path, filePath);
-
-    return await openDatabase(path, version: 1, onCreate: _createDB);
+    // Incrementamos versión para asegurar cambios si usas onUpgrade (aquí usamos onCreate básico)
+    return await openDatabase(path, version: 2, onCreate: _createDB);
   }
 
   Future _createDB(Database db, int version) async {
-    // Tabla Productos
     await db.execute('''
     CREATE TABLE productos (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       codigo TEXT UNIQUE,
+      sku TEXT, 
       factura TEXT,
       descripcion TEXT,
       marca TEXT,
@@ -44,7 +43,6 @@ class DBHelper {
     )
     ''');
 
-    // Tabla Ventas
     await db.execute('''
     CREATE TABLE ventas (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -57,7 +55,6 @@ class DBHelper {
     )
     ''');
 
-    // Tabla Historial Ingresos (Para lo de los 3 días)
     await db.execute('''
     CREATE TABLE historial_ingresos (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -69,8 +66,7 @@ class DBHelper {
     ''');
   }
 
-  // --- CRUD PRODUCTOS ---
-
+  // --- CRUD ---
   Future<int> insertProducto(Map<String, dynamic> row) async {
     final db = await database;
     return await db.insert('productos', row, conflictAlgorithm: ConflictAlgorithm.replace);
@@ -80,38 +76,28 @@ class DBHelper {
     final db = await database;
     final maps = await db.query(
       'productos',
-      where: 'codigo = ? OR factura = ?', // Busca por código de barras o factura antigua
-      whereArgs: [codigo, codigo],
+      where: 'codigo = ?',
+      whereArgs: [codigo],
     );
     if (maps.isNotEmpty) return maps.first;
     return null;
   }
 
-  // Búsqueda por nombre (LIKE)
   Future<List<Map<String, dynamic>>> buscarProductos(String query) async {
     final db = await database;
     return await db.query(
       'productos',
-      where: 'descripcion LIKE ? OR codigo LIKE ? OR factura LIKE ?',
-      whereArgs: ['%$query%', '%$query%', '%$query%'],
+      where: 'descripcion LIKE ? OR codigo LIKE ? OR sku LIKE ? OR factura LIKE ?',
+      whereArgs: ['%$query%', '%$query%', '%$query%', '%$query%'],
     );
   }
 
   Future<int> updateStock(String codigo, int cantidadSumar) async {
     final db = await database;
-    // Primero obtenemos el stock actual
     final prod = await getProductoPorCodigo(codigo);
     if (prod == null) return 0;
-
-    int stockActual = prod['stock'];
-    int nuevoStock = stockActual + cantidadSumar;
-
-    return await db.update(
-      'productos',
-      {'stock': nuevoStock},
-      where: 'id = ?',
-      whereArgs: [prod['id']],
-    );
+    int nuevoStock = prod['stock'] + cantidadSumar;
+    return await db.update('productos', {'stock': nuevoStock}, where: 'id = ?', whereArgs: [prod['id']]);
   }
 
   Future<int> deleteProducto(int id) async {
@@ -119,21 +105,24 @@ class DBHelper {
     return await db.delete('productos', where: 'id = ?', whereArgs: [id]);
   }
 
-  // --- VENTAS ---
   Future<int> insertVenta(Map<String, dynamic> row) async {
     final db = await database;
     return await db.insert('ventas', row);
   }
-  // --- VINCULACIÓN Y ACTUALIZACIONES ---
 
-  // Reemplaza el código temporal por el código de barras real escaneado
   Future<int> vincularCodigo(int idProducto, String nuevoCodigo) async {
     final db = await database;
+    return await db.update('productos', {'codigo': nuevoCodigo}, where: 'id = ?', whereArgs: [idProducto]);
+  }
+  // --- ACTUALIZAR PRODUCTO COMPLETO ---
+  Future<int> updateProducto(Map<String, dynamic> row) async {
+    final db = await database;
+    int id = row['id'];
     return await db.update(
       'productos',
-      {'codigo': nuevoCodigo},
+      row,
       where: 'id = ?',
-      whereArgs: [idProducto],
+      whereArgs: [id],
     );
   }
 }

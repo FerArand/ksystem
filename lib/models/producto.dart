@@ -1,6 +1,7 @@
 class Producto {
-  int? id; // ID interno de base de datos
-  String codigo; // Código de barras
+  int? id;
+  String codigo; // Código de Barras (Universal)
+  String sku;    // Código Interno (Nuevo)
   String factura;
   String descripcion;
   String marca;
@@ -13,6 +14,7 @@ class Producto {
   Producto({
     this.id,
     required this.codigo,
+    required this.sku, // Nuevo
     required this.factura,
     required this.descripcion,
     required this.marca,
@@ -27,6 +29,7 @@ class Producto {
     return Producto(
       id: map['id'],
       codigo: map['codigo'] ?? '',
+      sku: map['sku'] ?? '', // Nuevo
       factura: map['factura'] ?? '',
       descripcion: map['descripcion'] ?? '',
       marca: map['marca'] ?? '',
@@ -34,7 +37,7 @@ class Producto {
       precio: map['precio'] ?? 0.0,
       precioRappi: map['precioRappi'] ?? 0.0,
       stock: map['stock'] ?? 0,
-      borrado: (map['borrado'] == 1), // SQLite usa 1/0 para bool
+      borrado: (map['borrado'] == 1),
     );
   }
 
@@ -42,6 +45,7 @@ class Producto {
     return {
       'id': id,
       'codigo': codigo,
+      'sku': sku, // Nuevo
       'factura': factura,
       'descripcion': descripcion,
       'marca': marca,

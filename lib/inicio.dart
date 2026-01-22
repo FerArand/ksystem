@@ -2,9 +2,8 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:excel/excel.dart';
-import 'package:path_provider/path_provider.dart'; // Necesario para encontrar carpetas
+import 'package:path_provider/path_provider.dart';
 
-// Tus archivos locales
 import 'constants/colores.dart';
 import 'db_helper.dart';
 import 'models/producto.dart';
@@ -20,131 +19,11 @@ class Inicio extends StatefulWidget {
 }
 
 class _InicioState extends State<Inicio> {
-  String _seccionActual = 'venta'; // Sección por defecto
+  String _seccionActual = 'venta';
   bool _importando = false;
 
   // ------------------------------------------
-  // IMPORTAR DESDE EXCEL (ADAPTADO A SQLITE)
-  // ------------------------------------------
-  Future<void> _importarExcel() async {
-    setState(() => _importando = true);
-
-    try {
-      FilePickerResult? result = await FilePicker.platform.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: ['xlsx'],
-      );
-
-      if (result != null && result.files.single.path != null) {
-        var bytes = File(result.files.single.path!).readAsBytesSync();
-        var excel = Excel.decodeBytes(bytes);
-
-        // Intentamos buscar la hoja por nombre, si no, tomamos la primera
-        Sheet? sheet = excel.tables['Precios MENUDEO'];
-        sheet ??= excel.tables[excel.tables.keys.first];
-
-        if (sheet != null) {
-          final db = await DBHelper.instance.database;
-          int count = 0;
-
-          // Helper para leer celdas de forma segura
-          dynamic getCell(Data? cell) {
-            if (cell == null) return null;
-            var v = cell.value;
-            if (v == null) return null;
-            if (v is FormulaCellValue) return null;
-            if (v is BoolCellValue) return v.value;
-            if (v is IntCellValue) return v.value;
-            if (v is DoubleCellValue) return v.value;
-            if (v is TextCellValue) return v.value;
-            return v; // String u otros
-          }
-
-          // Iteramos filas (saltando encabezados si es necesario, aquí asumo fila 1 en adelante)
-          for (int r = 1; r < sheet.maxRows; r++) {
-            List<Data?> row = sheet.row(r);
-            if (row.isEmpty) continue;
-
-            // Mapeo basado en tu Excel original:
-            // Col 0: Stock (Inventario)
-            // Col 1: Factura
-            // Col 2: Marca
-            // Col 3: Descripción
-            // Col 4: Costo
-
-            var stockCell = getCell(row.length > 0 ? row[0] : null);
-            var facturaCell = getCell(row.length > 1 ? row[1] : null);
-            var marcaCell = getCell(row.length > 2 ? row[2] : null);
-            var descripcionCell = getCell(row.length > 3 ? row[3] : null);
-            var costoCell = getCell(row.length > 4 ? row[4] : null);
-
-            // Validamos campos mínimos obligatorios
-            if (descripcionCell == null || costoCell == null) continue;
-
-            String descripcion = descripcionCell.toString().trim();
-            String factura = facturaCell?.toString().trim() ?? '';
-            String marca = marcaCell?.toString().trim() ?? '';
-
-            // Conversiones numéricas seguras
-            double costo = 0.0;
-            if (costoCell is num) {
-              costo = costoCell.toDouble();
-            } else {
-              costo = double.tryParse(costoCell.toString()) ?? 0.0;
-            }
-
-            int stock = 0;
-            if (stockCell != null) {
-              if (stockCell is num) {
-                stock = stockCell.toInt();
-              } else {
-                stock = int.tryParse(stockCell.toString()) ?? 0;
-              }
-            }
-
-            // Cálculos de precios (Lógica original)
-            double precio = double.parse((costo * 1.46).toStringAsFixed(2));
-            double precioRappi = double.parse((precio * 1.35).toStringAsFixed(2));
-
-            // GENERACIÓN DE CÓDIGO
-            // CORRECCIÓN: NO usar factura como código.
-            // Generamos un código interno único para que no choque en la BD.
-            // Cuando vincules el producto, este código se reemplazará por el real.
-            String codigo = "NO_CODIGO_${DateTime.now().millisecondsSinceEpoch}_$r";
-
-            Map<String, dynamic> productoMap = {
-              'codigo': codigo,
-              'factura': factura,
-              'descripcion': descripcion,
-              'marca': marca,
-              'costo': costo,
-              'precio': precio,
-              'precioRappi': precioRappi,
-              'stock': stock,
-              'borrado': 0,
-            };
-
-            // Insertar en BD (ConflictAlgorithm.replace reemplaza si ya existe el código/ID)
-            await DBHelper.instance.insertProducto(productoMap);
-            count++;
-          }
-
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Importación completada. $count productos procesados.')),
-          );
-        }
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error al importar: $e')),
-      );
-    } finally {
-      setState(() => _importando = false);
-    }
-  }
-
-// ------------------------------------------
-  // EXPORTAR A EXCEL (CON AUTO-AJUSTE Y SIN DEPENDENCIAS)
+  // EXPORTAR A EXCEL
   // ------------------------------------------
   Future<void> _exportarExcel() async {
     setState(() => _importando = true);
@@ -155,57 +34,66 @@ class _InicioState extends State<Inicio> {
       List<Producto> productos = List.generate(maps.length, (i) => Producto.desdeMapa(maps[i]));
 
       var excel = Excel.createExcel();
-      String sheetName = 'Inventario';
+      String sheetName = 'Precios MENUDEO';
       Sheet sheetObject = excel[sheetName];
       excel.setDefaultSheet(sheetName);
 
-      // --- LÓGICA DE AUTO-ANCHO ---
-      Map<int, double> anchosColumnas = {
-        0: 15.0, 1: 10.0, 2: 15.0, 3: 30.0, 4: 10.0, 5: 12.0, 6: 12.0, 7: 8.0,
-      };
+      // ENCABEZADOS
+      List<String> titulos = [
+        'Código',         // A - 0
+        'Inventario',     // B - 1
+        'Factura',        // C - 2
+        'SKU',            // D - 3
+        'Marca',          // E - 4
+        'Descripción',    // F - 5
+        'Costo',          // G - 6
+        'Precio Público', // H - 7
+        'Costo Rappi'     // I - 8
+      ];
 
-      void checkWidth(int colIndex, String text) {
-        double anchoEstimado = text.length * 1.2;
-        if (anchoEstimado < 8) anchoEstimado = 8;
-        if (anchosColumnas[colIndex] == null || anchoEstimado > anchosColumnas[colIndex]!) {
-          anchosColumnas[colIndex] = anchoEstimado;
-        }
+      sheetObject.appendRow(titulos.map((e) => TextCellValue(e)).toList());
+
+      // LLENAR DATOS
+      Map<int, double> anchos = {};
+      void checkW(int col, String txt) {
+        double len = txt.length * 1.1;
+        if (len < 10) len = 10;
+        if (anchos[col] == null || len > anchos[col]!) anchos[col] = len;
       }
 
-      List<String> titulos = ['Código', 'Factura', 'Marca', 'Descripción', 'Costo', 'Precio Público', 'Precio Rappi', 'Stock'];
-      List<CellValue> headers = titulos.map((e) => TextCellValue(e)).toList();
-      sheetObject.appendRow(headers);
-
       for (var p in productos) {
-        String vCodigo = p.codigo;
-        String vFactura = p.factura;
+        String vCod = p.codigo;
+        String vStock = p.stock.toString();
+        String vFact = p.factura;
+        String vSku = p.sku;
         String vMarca = p.marca;
         String vDesc = p.descripcion;
 
-        checkWidth(0, vCodigo);
-        checkWidth(1, vFactura);
-        checkWidth(2, vMarca);
-        checkWidth(3, vDesc);
+        checkW(0, vCod); checkW(1, vStock); checkW(2, vFact); checkW(3, vSku);
+        checkW(4, vMarca); checkW(5, vDesc);
 
         List<CellValue> row = [
-          TextCellValue(vCodigo),
-          TextCellValue(vFactura),
+          TextCellValue(vCod),
+          IntCellValue(p.stock),
+          TextCellValue(vFact),
+          TextCellValue(vSku),
           TextCellValue(vMarca),
           TextCellValue(vDesc),
           DoubleCellValue(p.costo),
           DoubleCellValue(p.precio),
           DoubleCellValue(p.precioRappi),
-          IntCellValue(p.stock),
         ];
         sheetObject.appendRow(row);
       }
 
-      for (int i = 0; i < 8; i++) {
-        double anchoFinal = anchosColumnas[i] ?? 10.0;
-        if (anchoFinal > 60) anchoFinal = 60;
-        sheetObject.setColumnWidth(i, anchoFinal);
+      // Aplicar anchos
+      for (int i = 0; i < titulos.length; i++) {
+        double w = anchos[i] ?? 12.0;
+        if (w > 70) w = 70;
+        sheetObject.setColumnWidth(i, w);
       }
 
+      // Guardar
       Directory? directory;
       if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
         directory = await getDownloadsDirectory();
@@ -213,7 +101,7 @@ class _InicioState extends State<Inicio> {
       directory ??= await getApplicationDocumentsDirectory();
 
       String fecha = DateTime.now().toString().replaceAll(':', '-').split('.')[0];
-      String filePath = "${directory.path}/Inventario_Ktools_$fecha.xlsx";
+      String filePath = "${directory.path}/Inventario_KSystem_$fecha.xlsx";
 
       var fileBytes = excel.save();
       if (fileBytes != null) {
@@ -221,29 +109,257 @@ class _InicioState extends State<Inicio> {
           ..createSync(recursive: true)
           ..writeAsBytesSync(fileBytes);
 
-        // ÉXITO: Usamos SnackBar estándar
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Exportado exitosamente en: $filePath')),
-        );
+        _mostrarAlerta("Exportación Exitosa", "Archivo guardado en:\n$filePath");
       }
     } catch (e) {
-      // ERROR: Usamos Dialog directo sin depender de función externa
-      showDialog(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text("Error al Exportar"),
-          content: SingleChildScrollView(child: Text(e.toString())),
-          actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("OK"))],
-        ),
-      );
+      _mostrarAlerta("Error Exportar", e.toString());
     } finally {
       setState(() => _importando = false);
     }
   }
 
   // ------------------------------------------
-  // CONTENIDO CENTRAL
+  // IMPORTAR DESDE EXCEL (REGLA 48% FIJO)
   // ------------------------------------------
+  Future<void> _importarExcel() async {
+    setState(() => _importando = true);
+
+    try {
+      FilePickerResult? result = await FilePicker.platform.pickFiles(
+        type: FileType.custom, allowedExtensions: ['xlsx'],
+      );
+
+      if (result != null && result.files.single.path != null) {
+        var bytes = File(result.files.single.path!).readAsBytesSync();
+        var excel = Excel.decodeBytes(bytes);
+
+        Sheet? sheet = excel.tables['Precios MENUDEO'];
+        sheet ??= excel.tables[excel.tables.keys.first];
+
+        if (sheet != null && sheet.maxRows > 1) {
+
+          // DETECTAR FORMATO
+          List<Data?> headerRow = sheet.row(0);
+          String firstHeader = headerRow.isNotEmpty ? headerRow[0]?.value.toString().trim() ?? '' : '';
+          bool esFormatoApp = firstHeader.toLowerCase().contains("código") || firstHeader.toLowerCase().contains("codigo");
+
+          List<Producto> productosNuevos = [];
+          List<Producto> productosExistentesEnExcel = [];
+
+          // Helpers seguros
+          dynamic val(List<Data?> row, int i) => (i < row.length) ? row[i]?.value : null;
+          String str(dynamic v) => v?.toString().trim() ?? '';
+          double dbl(dynamic v) {
+            if (v == null) return 0.0;
+            return double.tryParse(v.toString().replaceAll(RegExp(r'[^0-9.]'), '')) ?? 0.0;
+          }
+          int intg(dynamic v) {
+            if (v == null) return 0;
+            return int.tryParse(v.toString().replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
+          }
+
+          // LEER FILAS
+          for (int r = 1; r < sheet.maxRows; r++) {
+            List<Data?> row = sheet.row(r);
+            if (row.isEmpty) continue;
+
+            String codigo = '';
+            String stockStr = '';
+            String factura = '';
+            String sku = '';
+            String marca = '';
+            String descripcion = '';
+            double costo = 0.0;
+
+            // Variables de precio que calcularemos nosotros
+            double precio = 0.0;
+            double rappi = 0.0;
+
+            try {
+              if (esFormatoApp) {
+                // FORMATO APP (9 columnas)
+                // Leemos todo EXCEPTO precio y rappi (cols 7 y 8)
+                codigo = str(val(row, 0));
+                stockStr = str(val(row, 1));
+                factura = str(val(row, 2));
+                sku = str(val(row, 3));
+                marca = str(val(row, 4));
+                descripcion = str(val(row, 5));
+                costo = dbl(val(row, 6));
+                // IGNORAMOS cols 7 y 8 del Excel
+              } else {
+                // FORMATO ORIGINAL (8 columnas)
+                // Leemos todo EXCEPTO precio y rappi (cols 6 y 7)
+                stockStr = str(val(row, 0));
+                factura = str(val(row, 1));
+                sku = str(val(row, 2));
+                marca = str(val(row, 3));
+                descripcion = str(val(row, 4));
+                costo = dbl(val(row, 5));
+                // IGNORAMOS cols 6 y 7 del Excel
+
+                codigo = "GEN-${DateTime.now().millisecondsSinceEpoch}-$r";
+              }
+
+              if (descripcion.isEmpty) continue;
+
+              // --- CÁLCULO FORZADO DE PRECIOS (REGLA 48%) ---
+              if (costo > 0) {
+                // Precio Público = Costo + 48%
+                precio = double.parse((costo * 1.48).toStringAsFixed(2));
+                // Rappi = Precio Público + 35%
+                rappi = double.parse((precio * 1.35).toStringAsFixed(2));
+              } else {
+                precio = 0.0;
+                rappi = 0.0;
+              }
+
+              int stock = int.tryParse(stockStr) ?? 0;
+
+              Producto p = Producto(
+                  codigo: codigo,
+                  sku: sku,
+                  factura: factura,
+                  marca: marca,
+                  descripcion: descripcion,
+                  costo: costo,
+                  precio: precio,
+                  precioRappi: rappi,
+                  stock: stock,
+                  borrado: false
+              );
+
+              // DETECCIÓN DE DUPLICADOS
+              bool existe = false;
+              int? idBd;
+
+              if (esFormatoApp && !codigo.startsWith("GEN-")) {
+                final porCodigo = await DBHelper.instance.getProductoPorCodigo(codigo);
+                if (porCodigo != null) {
+                  existe = true;
+                  idBd = porCodigo['id'];
+                }
+              }
+
+              if (!existe) {
+                final porNombre = await DBHelper.instance.buscarProductos(descripcion);
+                var match = porNombre.firstWhere(
+                        (element) => element['descripcion'].toString().toLowerCase() == descripcion.toLowerCase(),
+                    orElse: () => {}
+                );
+
+                if (match.isNotEmpty) {
+                  existe = true;
+                  idBd = match['id'];
+                  String codigoBd = match['codigo'];
+                  if (!codigoBd.startsWith("GEN-")) {
+                    p.codigo = codigoBd;
+                  }
+                }
+              }
+
+              if (existe) {
+                p.id = idBd;
+                productosExistentesEnExcel.add(p);
+              } else {
+                productosNuevos.add(p);
+              }
+
+            } catch (e) {
+              print("Error fila $r: $e");
+            }
+          }
+
+          // FLUJO DE DECISIÓN
+          bool actualizarExistentes = false;
+          bool cancelar = false;
+
+          if (productosExistentesEnExcel.isNotEmpty) {
+            await showDialog(
+              context: context,
+              barrierDismissible: false,
+              builder: (ctx) => AlertDialog(
+                title: const Text("⚠️ Duplicados Detectados"),
+                content: Text(
+                    "Hay ${productosExistentesEnExcel.length} productos que ya existen.\n\n"
+                        "Se recalcularán sus precios al 48% de margen basándose en el COSTO del Excel.\n"
+                        "¿Deseas aplicar estos cambios?"
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () { cancelar = true; Navigator.pop(ctx); },
+                    child: const Text("Cancelar", style: TextStyle(color: Colors.grey)),
+                  ),
+                  TextButton(
+                    onPressed: () {
+                      actualizarExistentes = false;
+                      Navigator.pop(ctx);
+                    },
+                    child: const Text("Ignorar (Solo Nuevos)"),
+                  ),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(backgroundColor: Colores.azulCielo, foregroundColor: Colors.white),
+                    onPressed: () {
+                      actualizarExistentes = true;
+                      Navigator.pop(ctx);
+                    },
+                    child: const Text("ACTUALIZAR PRECIOS"),
+                  )
+                ],
+              ),
+            );
+          }
+
+          if (cancelar) {
+            setState(() => _importando = false);
+            return;
+          }
+
+          // GUARDAR
+          int insertados = 0;
+          int actualizados = 0;
+
+          for (var p in productosNuevos) {
+            await DBHelper.instance.insertProducto(p.aMapa());
+            insertados++;
+          }
+
+          if (actualizarExistentes) {
+            for (var p in productosExistentesEnExcel) {
+              if (p.id != null) {
+                await DBHelper.instance.updateProducto(p.aMapa());
+                actualizados++;
+              }
+            }
+          }
+
+          _mostrarAlerta(
+              "Importación Finalizada",
+              "Nuevos agregados: $insertados\n"
+                  "Actualizados (Margen 48%): $actualizados\n"
+                  "Total procesados: ${insertados + actualizados}"
+          );
+        }
+      }
+    } catch (e) {
+      _mostrarAlerta("Error Crítico", e.toString());
+    } finally {
+      setState(() => _importando = false);
+    }
+  }
+
+  void _mostrarAlerta(String titulo, String mensaje) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(titulo),
+        content: SingleChildScrollView(child: Text(mensaje)),
+        actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("OK"))],
+      ),
+    );
+  }
+
+  // UI
   Widget _contenido() {
     if (_importando) {
       return const Center(child: Column(
@@ -251,26 +367,19 @@ class _InicioState extends State<Inicio> {
         children: [
           CircularProgressIndicator(),
           SizedBox(height: 20),
-          Text("Procesando archivo Excel..."),
+          Text("Recalculando precios y procesando..."),
         ],
       ));
     }
 
     switch (_seccionActual) {
-      case 'venta':
-        return const Venta();
-      case 'anadir':
-        return const NuevoIngreso();
-      case 'consultar':
-        return const Productos();
-      default:
-        return const Venta();
+      case 'venta': return const Venta();
+      case 'anadir': return const NuevoIngreso();
+      case 'consultar': return const Productos();
+      default: return const Venta();
     }
   }
 
-  // ------------------------------------------
-  // INTERFAZ (UI)
-  // ------------------------------------------
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -283,33 +392,16 @@ class _InicioState extends State<Inicio> {
             child: Column(
               children: [
                 const SizedBox(height: 30),
-                // LOGO / TÍTULO
-                const Text(
-                  'KTOOLS',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 2,
-                  ),
-                ),
-                const Text(
-                  'Local System',
-                  style: TextStyle(
-                    color: Colors.grey,
-                    fontSize: 12,
-                  ),
-                ),
+                const Text('KTOOLS', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold, letterSpacing: 2)),
+                const Text('Local System', style: TextStyle(color: Colors.grey, fontSize: 12)),
                 const SizedBox(height: 40),
 
-                // OPCIONES DE MENÚ
                 _buildMenuItem(Icons.point_of_sale, 'Venta (Inicio)', 'venta'),
                 _buildMenuItem(Icons.add_circle_outline, 'Añadir / Ingreso', 'anadir'),
                 _buildMenuItem(Icons.list_alt, 'Consultar', 'consultar'),
 
                 const Divider(color: Colors.grey),
 
-                // OPCIONES DE ARCHIVO
                 ListTile(
                   leading: const Icon(Icons.upload_file, color: Colors.white70),
                   title: const Text('Importar Excel', style: TextStyle(color: Colors.white70, fontSize: 14)),
@@ -323,11 +415,10 @@ class _InicioState extends State<Inicio> {
               ],
             ),
           ),
-
-          // ÁREA DE CONTENIDO
+          // CONTENIDO
           Expanded(
             child: Container(
-              color: Colors.grey[100], // Fondo ligero para el área de trabajo
+              color: Colors.grey[100],
               child: _contenido(),
             ),
           ),
@@ -336,23 +427,14 @@ class _InicioState extends State<Inicio> {
     );
   }
 
-  // Helper para items del menú
   Widget _buildMenuItem(IconData icon, String title, String seccion) {
     bool isSelected = _seccionActual == seccion;
     return Container(
       color: isSelected ? Colors.white.withOpacity(0.1) : null,
       child: ListTile(
         leading: Icon(icon, color: isSelected ? Colores.azulCielo : Colors.white),
-        title: Text(
-          title,
-          style: TextStyle(
-            color: isSelected ? Colores.azulCielo : Colors.white,
-            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-          ),
-        ),
-        onTap: () {
-          setState(() => _seccionActual = seccion);
-        },
+        title: Text(title, style: TextStyle(color: isSelected ? Colores.azulCielo : Colors.white, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal)),
+        onTap: () => setState(() => _seccionActual = seccion),
       ),
     );
   }
