@@ -1,0 +1,44 @@
+name: Build Windows Executable
+
+on:
+  push:
+    branches: [ "main", "master" ] # Se ejecuta cuando subes cambios a estas ramas
+  workflow_dispatch: # Permite activarlo manualmente desde un botón
+
+jobs:
+  build:
+    name: Build & Release
+    runs-on: windows-latest # ¡Aquí está la magia! GitHub nos presta un Windows
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          # Puedes especificar versión si quieres, ej: flutter-version: '3.19.0'
+
+      - name: Enable Windows Support
+        run: flutter config --enable-windows-desktop
+
+      - name: Install Dependencies
+        run: flutter pub get
+
+      - name: Build Windows App
+        run: flutter build windows --release
+
+      # Opcional: Copiar DLLs extra si fuera necesario (usualmente flutter lo hace solo)
+
+      - name: Compress Release Folder
+        # Comprimimos la carpeta Release para que sea fácil de descargar
+        run: |
+          Compress-Archive -Path build\windows\x64\runner\Release\* -DestinationPath ksystem_windows.zip
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ksystem-windows-v1
+          path: ksystem_windows.zip
+          retention-days: 5
