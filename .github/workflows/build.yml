@@ -19,6 +19,11 @@ jobs:
       - name: Enable Windows
         run: flutter config --enable-windows-desktop
       
+      # --- AGREGA ESTE BLOQUE ---
+      - name: Create Windows files
+        run: flutter create --platforms=windows .
+      # --------------------------
+
       - name: Get Dependencies
         run: flutter pub get
         
