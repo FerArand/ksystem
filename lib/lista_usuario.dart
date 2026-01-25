@@ -12,7 +12,7 @@
 //       message: 'No hay usuario autenticado.',
 //     );
 //   }
-//
+///
 //   return FirebaseFirestore.instance
 //       .collection('usuarios')
 //       .doc(usuario.uid)
