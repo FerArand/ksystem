@@ -63,4 +63,4 @@ class RecentDB {
     final res = await db.query('recientes', orderBy: 'fecha_agregado DESC');
     return res.map((e) => e['codigo'] as String).toList();
   }
-}
+}//
