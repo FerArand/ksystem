@@ -11,6 +11,10 @@ import 'venta.dart';
 import 'productos.dart';
 import 'nuevo_ingreso.dart';
 
+import 'historial_ventas.dart';
+import 'ventas_hoy.dart';
+
+
 class Inicio extends StatefulWidget {
   const Inicio({Key? key}) : super(key: key);
 
@@ -376,6 +380,8 @@ class _InicioState extends State<Inicio> {
       case 'venta': return const Venta();
       case 'anadir': return const NuevoIngreso();
       case 'consultar': return const Productos();
+      case 'ventas_hoy': return const VentasHoy();
+      case 'historial': return const HistorialVentas();
       default: return const Venta();
     }
   }
@@ -396,12 +402,13 @@ class _InicioState extends State<Inicio> {
                 const Text('Local System', style: TextStyle(color: Colors.grey, fontSize: 12)),
                 const SizedBox(height: 40),
 
-                _buildMenuItem(Icons.point_of_sale, 'Venta (Inicio)', 'venta'),
-                _buildMenuItem(Icons.add_circle_outline, 'Añadir / Ingreso', 'anadir'),
+                _buildMenuItem(Icons.point_of_sale, 'Venta', 'venta'),
+                _buildMenuItem(Icons.today, 'Ventas del Día', 'ventas_hoy'),
+                _buildMenuItem(Icons.add_circle_outline, 'Añadir', 'anadir'),
                 _buildMenuItem(Icons.list_alt, 'Consultar', 'consultar'),
+                _buildMenuItem(Icons.history, 'Bitácora', 'historial'),
 
                 const Divider(color: Colors.grey),
-
                 ListTile(
                   leading: const Icon(Icons.upload_file, color: Colors.white70),
                   title: const Text('Importar Excel', style: TextStyle(color: Colors.white70, fontSize: 14)),

@@ -1,9 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:intl/date_symbol_data_local.dart'; // <--- 1. Importar esto
 import 'inicio.dart';
 
-void main() {
+void main() async { // <--- 2. Convertir main a async
   WidgetsFlutterBinding.ensureInitialized();
-  // Aquí ya no inicializamos Firebase
+
+  // 3. Inicializar los datos de formato para Español (México)
+  // Esto carga los nombres de los días y meses en español
+  await initializeDateFormatting('es_MX', null);
+
   runApp(const MyApp());
 }
 
@@ -20,7 +25,7 @@ class MyApp extends StatelessWidget {
         scaffoldBackgroundColor: Colors.white,
         useMaterial3: true,
       ),
-      home: const Inicio(), // Va directo al Inicio, sin Login
+      home: const Inicio(),
     );
   }
 }
