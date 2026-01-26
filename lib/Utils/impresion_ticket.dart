@@ -17,7 +17,6 @@ class ImpresionTicket {
     final doc = pw.Document();
     final fecha = DateFormat('dd/MM/yyyy HH:mm').format(DateTime.now());
 
-    // Configuración de página de 58mm
     final PdfPageFormat formatoTicket = PdfPageFormat(
       58 * PdfPageFormat.mm, 
       double.infinity, 
@@ -29,7 +28,6 @@ class ImpresionTicket {
         pageFormat: formatoTicket,
         build: (pw.Context context) {
           return pw.Padding(
-            // Margen derecho de seguridad para que no se corte
             padding: const pw.EdgeInsets.only(left: 0, right: 8 * PdfPageFormat.mm), 
             child: pw.Column(
               crossAxisAlignment: pw.CrossAxisAlignment.center,
@@ -37,34 +35,33 @@ class ImpresionTicket {
               children: [
                 pw.SizedBox(height: 5 * PdfPageFormat.mm), 
                 
-                // --- ENCABEZADO ---
+                // ENCABEZADO
                 pw.Text('KTOOLS', 
-                    // CORRECCIÓN AQUÍ: FontWeight.bold en lugar de pw.FontWeight.bold
-                    style: pw.TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                    style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 18)),
                 
                 pw.Text('FERREELÉCTRICA', 
-                    // CORRECCIÓN AQUÍ TAMBIÉN
-                    style: const pw.TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+                    style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold)),
                 
                 pw.SizedBox(height: 5),
                 pw.Text(fecha, style: const pw.TextStyle(fontSize: 8)),
-                // Y AQUÍ
-                pw.Text('Folio Venta: #$folioVenta', style: pw.TextStyle(fontWeight: FontWeight.bold, fontSize: 8)),
+                
+                pw.Text('Folio Venta: #$folioVenta', 
+                    style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8)),
                 
                 pw.Divider(borderStyle: pw.BorderStyle.dashed),
 
-                // --- LISTA DE PRODUCTOS ---
+                // LISTA DE PRODUCTOS (Encabezados)
                 pw.Row(
                   mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                   children: [
-                    // Y EN ESTOS ENCABEZADOS
-                    pw.Expanded(flex: 1, child: pw.Text('Cant', style: pw.TextStyle(fontSize: 7, fontWeight: FontWeight.bold))),
-                    pw.Expanded(flex: 3, child: pw.Text('Desc', style: pw.TextStyle(fontSize: 7, fontWeight: FontWeight.bold))),
-                    pw.Expanded(flex: 1, child: pw.Text('Total', textAlign: pw.TextAlign.right, style: pw.TextStyle(fontSize: 7, fontWeight: FontWeight.bold))),
+                    pw.Expanded(flex: 1, child: pw.Text('Cant', style: pw.TextStyle(fontSize: 7, fontWeight: pw.FontWeight.bold))),
+                    pw.Expanded(flex: 3, child: pw.Text('Desc', style: pw.TextStyle(fontSize: 7, fontWeight: pw.FontWeight.bold))),
+                    pw.Expanded(flex: 1, child: pw.Text('Total', textAlign: pw.TextAlign.right, style: pw.TextStyle(fontSize: 7, fontWeight: pw.FontWeight.bold))),
                   ]
                 ),
                 pw.SizedBox(height: 4),
 
+                // ITEMS
                 ...items.map((item) {
                   final subtotal = item.producto.precio * item.cantidad;
                   return pw.Padding(
@@ -82,12 +79,12 @@ class ImpresionTicket {
 
                 pw.Divider(borderStyle: pw.BorderStyle.dashed),
 
-                // --- TOTALES ---
+                // TOTALES
                 pw.Row(
                   mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                   children: [
-                    pw.Text('TOTAL:', style: pw.TextStyle(fontWeight: FontWeight.bold, fontSize: 10)),
-                    pw.Text('\$${total.toStringAsFixed(2)}', style: pw.TextStyle(fontWeight: FontWeight.bold, fontSize: 10)),
+                    pw.Text('TOTAL:', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10)),
+                    pw.Text('\$${total.toStringAsFixed(2)}', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10)),
                   ]
                 ),
                 pw.SizedBox(height: 2),
@@ -107,12 +104,12 @@ class ImpresionTicket {
                 ),
 
                 pw.SizedBox(height: 10),
-                pw.Text('Gracias por su preferencia', style: pw.TextStyle(fontWeight: FontWeight.bold, fontSize: 8)),
+                pw.Text('Gracias por su preferencia', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8)),
                 
                 pw.Divider(borderStyle: pw.BorderStyle.dashed),
                 
-                // --- DISCLAIMERS ---
-                pw.Text('Este no es comprobante fiscal', style: pw.TextStyle(fontWeight: FontWeight.bold, fontSize: 9)),
+                // DISCLAIMERS
+                pw.Text('Este no es comprobante fiscal', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 9)),
                 pw.SizedBox(height: 5),
                 pw.Text(
                   'KTOOLS no asume responsabilidad por daños derivados de una instalación incorrecta, negligencia o variaciones de voltaje. No se aceptan cambios por daño físico.',
