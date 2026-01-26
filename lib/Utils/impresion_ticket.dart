@@ -28,7 +28,8 @@ class ImpresionTicket {
         pageFormat: formatoTicket,
         build: (pw.Context context) {
           return pw.Padding(
-            padding: const pw.EdgeInsets.only(left: 0, right: 8 * PdfPageFormat.mm), 
+            // CAMBIO CLAVE: Aumentamos a 15mm para salvar los decimales
+            padding: const pw.EdgeInsets.only(left: 0, right: 15 * PdfPageFormat.mm), 
             child: pw.Column(
               crossAxisAlignment: pw.CrossAxisAlignment.center,
               mainAxisSize: pw.MainAxisSize.min,
@@ -37,16 +38,16 @@ class ImpresionTicket {
                 
                 // ENCABEZADO
                 pw.Text('KTOOLS', 
-                    style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 18)),
+                    style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 16)), // Un poco más chico para que no se corte
                 
                 pw.Text('FERREELÉCTRICA', 
-                    style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold)),
+                    style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
                 
                 pw.SizedBox(height: 5),
-                pw.Text(fecha, style: const pw.TextStyle(fontSize: 8)),
+                pw.Text(fecha, style: const pw.TextStyle(fontSize: 7)),
                 
                 pw.Text('Folio Venta: #$folioVenta', 
-                    style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8)),
+                    style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 7)),
                 
                 pw.Divider(borderStyle: pw.BorderStyle.dashed),
 
@@ -54,9 +55,9 @@ class ImpresionTicket {
                 pw.Row(
                   mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                   children: [
-                    pw.Expanded(flex: 1, child: pw.Text('Cant', style: pw.TextStyle(fontSize: 7, fontWeight: pw.FontWeight.bold))),
-                    pw.Expanded(flex: 3, child: pw.Text('Desc', style: pw.TextStyle(fontSize: 7, fontWeight: pw.FontWeight.bold))),
-                    pw.Expanded(flex: 1, child: pw.Text('Total', textAlign: pw.TextAlign.right, style: pw.TextStyle(fontSize: 7, fontWeight: pw.FontWeight.bold))),
+                    pw.Expanded(flex: 1, child: pw.Text('Cant', style: pw.TextStyle(fontSize: 6, fontWeight: pw.FontWeight.bold))),
+                    pw.Expanded(flex: 3, child: pw.Text('Art', style: pw.TextStyle(fontSize: 6, fontWeight: pw.FontWeight.bold))),
+                    pw.Expanded(flex: 1, child: pw.Text('Total', textAlign: pw.TextAlign.right, style: pw.TextStyle(fontSize: 6, fontWeight: pw.FontWeight.bold))),
                   ]
                 ),
                 pw.SizedBox(height: 4),
@@ -69,9 +70,9 @@ class ImpresionTicket {
                     child: pw.Row(
                       crossAxisAlignment: pw.CrossAxisAlignment.start,
                       children: [
-                        pw.Expanded(flex: 1, child: pw.Text('${item.cantidad}', style: const pw.TextStyle(fontSize: 7))),
-                        pw.Expanded(flex: 3, child: pw.Text(item.producto.descripcion, maxLines: 2, style: const pw.TextStyle(fontSize: 7))),
-                        pw.Expanded(flex: 1, child: pw.Text('\$${subtotal.toStringAsFixed(2)}', textAlign: pw.TextAlign.right, style: const pw.TextStyle(fontSize: 7))),
+                        pw.Expanded(flex: 1, child: pw.Text('${item.cantidad}', style: const pw.TextStyle(fontSize: 6))),
+                        pw.Expanded(flex: 3, child: pw.Text(item.producto.descripcion, maxLines: 2, style: const pw.TextStyle(fontSize: 6))),
+                        pw.Expanded(flex: 1, child: pw.Text('\$${subtotal.toStringAsFixed(2)}', textAlign: pw.TextAlign.right, style: const pw.TextStyle(fontSize: 6))),
                       ]
                     )
                   );
@@ -83,38 +84,38 @@ class ImpresionTicket {
                 pw.Row(
                   mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                   children: [
-                    pw.Text('TOTAL:', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10)),
-                    pw.Text('\$${total.toStringAsFixed(2)}', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10)),
+                    pw.Text('TOTAL:', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 9)),
+                    pw.Text('\$${total.toStringAsFixed(2)}', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 9)),
                   ]
                 ),
                 pw.SizedBox(height: 2),
                 pw.Row(
                     mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                     children: [
-                      pw.Text('Recibido:', style: const pw.TextStyle(fontSize: 8)),
-                      pw.Text('\$${recibido.toStringAsFixed(2)}', style: const pw.TextStyle(fontSize: 8)),
+                      pw.Text('Recibido:', style: const pw.TextStyle(fontSize: 7)),
+                      pw.Text('\$${recibido.toStringAsFixed(2)}', style: const pw.TextStyle(fontSize: 7)),
                     ]
                 ),
                 pw.Row(
                     mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                     children: [
-                      pw.Text('Cambio:', style: const pw.TextStyle(fontSize: 8)),
-                      pw.Text('\$${cambio.toStringAsFixed(2)}', style: const pw.TextStyle(fontSize: 8)),
+                      pw.Text('Cambio:', style: const pw.TextStyle(fontSize: 7)),
+                      pw.Text('\$${cambio.toStringAsFixed(2)}', style: const pw.TextStyle(fontSize: 7)),
                     ]
                 ),
 
                 pw.SizedBox(height: 10),
-                pw.Text('Gracias por su preferencia', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8)),
+                pw.Text('Gracias por su preferencia', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 7)),
                 
                 pw.Divider(borderStyle: pw.BorderStyle.dashed),
                 
                 // DISCLAIMERS
-                pw.Text('Este no es comprobante fiscal', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 9)),
+                pw.Text('Este no es comprobante fiscal', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8)),
                 pw.SizedBox(height: 5),
                 pw.Text(
-                  'KTOOLS no asume responsabilidad por daños derivados de una instalación incorrecta, negligencia o variaciones de voltaje. No se aceptan cambios por daño físico.',
+                  'KTOOLS no asume responsabilidad por daños derivados de una instalación incorrecta, negligencia o variaciones de voltaje.',
                   textAlign: pw.TextAlign.center,
-                  style: const pw.TextStyle(fontSize: 7), 
+                  style: const pw.TextStyle(fontSize: 6), 
                 ),
                 pw.SizedBox(height: 10 * PdfPageFormat.mm),
               ]
