@@ -29,6 +29,12 @@ class _VentaState extends State<Venta> {
   double _recibido = 0.0;
   final TextEditingController _recibidoController = TextEditingController();
 
+  // --- CALCULADORA DE CORTES ---
+  final TextEditingController _calcBaseLen = TextEditingController();
+  final TextEditingController _calcBasePrecio = TextEditingController();
+  final TextEditingController _calcCorteLen = TextEditingController();
+  double _calcResultado = 0.0;
+
   @override
   void initState() {
     super.initState();
@@ -43,8 +49,20 @@ class _VentaState extends State<Venta> {
     setState(() => _total = temp);
   }
 
-  // BUSCA LA FUNCIÓN: Future<void> _escanearCodigo(String codigo) async
-// REEMPLÁZALA CON ESTA LÓGICA:
+  // Lógica de la calculadora "Regla de Tres"
+  void _calcularReglaTres() {
+    double baseLen = double.tryParse(_calcBaseLen.text) ?? 0;
+    double basePrecio = double.tryParse(_calcBasePrecio.text) ?? 0;
+    double corteLen = double.tryParse(_calcCorteLen.text) ?? 0;
+
+    setState(() {
+      if (baseLen > 0) {
+        _calcResultado = (basePrecio * corteLen) / baseLen;
+      } else {
+        _calcResultado = 0.0;
+      }
+    });
+  }
 
   Future<void> _escanearCodigo(String codigo) async {
     if (codigo.isEmpty) return;
@@ -54,16 +72,15 @@ class _VentaState extends State<Venta> {
       final p = Producto.desdeMapa(data);
       _agregarItemLogica(p);
     } else {
-      // ANTES: _mostrarDialogoCrearRapido(codigo.trim());
-      // AHORA: Abrimos directo el formulario sin preguntar
+      // MODIFICACIÓN: Abre directo el formulario sin preguntar
       _abrirFormularioCreacionDirecta(codigo.trim());
     }
     _codigoController.clear();
-    // Nota: El focus se recupera mejor al cerrar el dialogo,
-    // pero lo dejamos aquí por si acaso.
+    // Recuperamos el foco (aunque el dialogo lo roba momentáneamente, esto ayuda al volver)
+    _focusNode.requestFocus();
   }
 
-  // AGREGA ESTA NUEVA FUNCIÓN (Reemplaza a _mostrarDialogoCrearRapido si quieres, o déjala aparte)
+  // Nueva función para abrir formulario directo
   Future<void> _abrirFormularioCreacionDirecta(String codigo) async {
     await showDialog(
         context: context,
@@ -75,85 +92,13 @@ class _VentaState extends State<Venta> {
             }
         )
     );
-    // Al volver del dialogo, recuperamos el foco
     _focusNode.requestFocus();
   }
 
-// BUSCA LA FUNCIÓN: void _agregarItemLogica(Producto p)
-// REEMPLÁZALA CON ESTA (Sin validación de stock <= 0):
-
-  void _agregarItemLogica(Producto p) {
-    // ELIMINADO EL IF DE STOCK <= 0
-    // if (p.stock <= 0) { ... return; } <--- ESTO YA NO ESTÁ
-
-    int index = _carrito.indexWhere((item) => item.producto.id == p.id);
-    setState(() {
-      if (index != -1) {
-        // ELIMINADA LA RESTRICCIÓN DE STOCK MÁXIMO
-        // if (_carrito[index].cantidad < p.stock) ...
-        // AHORA SIMPLEMENTE SUMA:
-        _carrito[index].cantidad++;
-      } else {
-        _carrito.insert(0, ItemVenta(producto: p, cantidad: 1));
-      }
-      _calcularTotal();
-    });
-  }
-
-// BUSCA LA FUNCIÓN: void _cambiarCantidad(ItemVenta item, int delta)
-// REEMPLÁZALA CON ESTA (Sin restricción de tope):
-
-  void _cambiarCantidad(ItemVenta item, int delta) {
-    setState(() {
-      int nuevaCant = item.cantidad + delta;
-
-      // ELIMINADO BLOQUE DE VALIDACIÓN SUPERIOR
-      // if (nuevaCant > item.producto.stock) { ... return; }
-
-      if (nuevaCant < 1) {
-        _carrito.remove(item);
-      } else {
-        item.cantidad = nuevaCant;
-      }
-      _calcularTotal();
-    });
-  }
-
-  Future<void> _mostrarDialogoCrearRapido(String codigo) async {
-    showDialog(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text("Producto no encontrado"),
-          content: Text("El código '$codigo' no existe. ¿Quieres crearlo ahora?"),
-          actions: [
-            TextButton(onPressed: ()=>Navigator.pop(ctx), child: const Text("Cancelar")),
-            ElevatedButton(
-                child: const Text("CREAR PRODUCTO"),
-                onPressed: () {
-                  Navigator.pop(ctx);
-                  showDialog(
-                      context: context,
-                      builder: (c) => ProductFormDialog(
-                          codigoInicial: codigo,
-                          onGuardado: (nuevoProducto) {
-                            _agregarItemLogica(nuevoProducto);
-                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Producto creado y agregado.")));
-                          }
-                      )
-                  );
-                }
-            )
-          ],
-        )
-    );
-  }
-
-  // --- LÓGICA DE FIADO (ACTUALIZADA) ---
+  // --- LÓGICA DE FIADO ---
   Future<void> _crearFiado() async {
     if (_carrito.isEmpty) return;
 
-    // GUARDAMOS INFO COMPLETA: Cantidad, SKU, Precio Venta y Costo Original
-    // Formato: "1x Tornillo [SKU:123] [P:15.5] [C:10.0]"
     String itemsResumen = _carrito.map((e) {
       String extra = "";
       if (e.producto.sku.isNotEmpty) extra += " [SKU:${e.producto.sku}]";
@@ -208,7 +153,35 @@ class _VentaState extends State<Venta> {
     );
   }
 
-    Future<void> _abrirBusquedaManual() async {
+  void _agregarItemLogica(Producto p) {
+    // MODIFICACIÓN: Se eliminó la validación de stock <= 0
+    int index = _carrito.indexWhere((item) => item.producto.id == p.id);
+    setState(() {
+      if (index != -1) {
+        // MODIFICACIÓN: Se eliminó el límite de stock máximo
+        _carrito[index].cantidad++;
+      } else {
+        _carrito.insert(0, ItemVenta(producto: p, cantidad: 1));
+      }
+      _calcularTotal();
+    });
+  }
+
+  void _cambiarCantidad(ItemVenta item, int delta) {
+    setState(() {
+      int nuevaCant = item.cantidad + delta;
+
+      // MODIFICACIÓN: Se eliminó la validación de stock insuficiente
+      if (nuevaCant < 1) {
+        _carrito.remove(item);
+      } else {
+        item.cantidad = nuevaCant;
+      }
+      _calcularTotal();
+    });
+  }
+
+  Future<void> _abrirBusquedaManual() async {
     await showDialog(
       context: context,
       builder: (context) => DialogoBusquedaVenta(
@@ -266,6 +239,103 @@ class _VentaState extends State<Venta> {
 
   void _alerta(String t, String m) {
     showDialog(context: context, builder: (_) => AlertDialog(title: Text(t), content: Text(m), actions: [TextButton(onPressed: ()=>Navigator.pop(context), child: const Text("OK"))]));
+  }
+
+  // WIDGET NUEVO: CALCULADORA DE CORTES
+  Widget _barraCalculadoraCortes() {
+    InputDecoration inputStyle(String hint) => InputDecoration(
+      hintText: hint,
+      isDense: true,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+      filled: true,
+      fillColor: Colors.white,
+    );
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      margin: const EdgeInsets.only(top: 10),
+      decoration: BoxDecoration(
+        color: Colors.blue[50],
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.blue.shade200),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          const Icon(Icons.calculate, color: Colors.blue, size: 28),
+          const SizedBox(width: 10),
+          const Text("Si ", style: TextStyle(fontSize: 16)),
+
+          SizedBox(
+            width: 80,
+            child: TextField(
+              controller: _calcBaseLen,
+              keyboardType: TextInputType.number,
+              textAlign: TextAlign.center,
+              decoration: inputStyle("Tramo"),
+              onChanged: (_) => _calcularReglaTres(),
+            ),
+          ),
+
+          const Text("(CM, LTS, ETC.) vale \$", style: TextStyle(fontSize: 16)),
+
+          SizedBox(
+            width: 80,
+            child: TextField(
+              controller: _calcBasePrecio,
+              keyboardType: TextInputType.number,
+              textAlign: TextAlign.center,
+              decoration: inputStyle("\$"),
+              onChanged: (_) => _calcularReglaTres(),
+            ),
+          ),
+
+          const Text(", los ", style: TextStyle(fontSize: 16)),
+
+          SizedBox(
+            width: 80,
+            child: TextField(
+              controller: _calcCorteLen,
+              keyboardType: TextInputType.number,
+              textAlign: TextAlign.center,
+              decoration: inputStyle("Corte"),
+              onChanged: (_) => _calcularReglaTres(),
+            ),
+          ),
+
+          const Text("(CM, LTS, ETC.) valen: ", style: TextStyle(fontSize: 16)),
+
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: Colors.blue,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              "\$${_calcResultado.toStringAsFixed(2)}",
+              style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 18
+              ),
+            ),
+          ),
+
+          const Spacer(),
+          IconButton(
+            icon: const Icon(Icons.refresh, color: Colors.grey),
+            tooltip: "Limpiar calculadora",
+            onPressed: () {
+              _calcBaseLen.clear();
+              _calcBasePrecio.clear();
+              _calcCorteLen.clear();
+              _calcularReglaTres();
+            },
+          )
+        ],
+      ),
+    );
   }
 
   @override
@@ -333,7 +403,10 @@ class _VentaState extends State<Venta> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(p.descripcion, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                                    Text("\$${p.precio.toStringAsFixed(2)} c/u  |  Disp: ${p.stock}", style: TextStyle(color: Colors.grey[700], fontSize: 13)),
+                                    // Stock puede ser negativo, se muestra tal cual
+                                    Text("\$${p.precio.toStringAsFixed(2)} c/u  |  Disp: ${p.stock}",
+                                        style: TextStyle(color: p.stock <= 0 ? Colors.red : Colors.grey[700], fontSize: 13)
+                                    ),
                                   ],
                                 ),
                               ),
@@ -446,6 +519,9 @@ class _VentaState extends State<Venta> {
               ],
             ),
           ),
+
+          // INCLUIMOS LA BARRA DE CALCULADORA AQUÍ
+          _barraCalculadoraCortes(),
         ],
       ),
     );
