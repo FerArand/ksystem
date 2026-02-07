@@ -43,6 +43,9 @@ class _VentaState extends State<Venta> {
     setState(() => _total = temp);
   }
 
+  // BUSCA LA FUNCIÓN: Future<void> _escanearCodigo(String codigo) async
+// REEMPLÁZALA CON ESTA LÓGICA:
+
   Future<void> _escanearCodigo(String codigo) async {
     if (codigo.isEmpty) return;
     final data = await DBHelper.instance.getProductoPorCodigo(codigo.trim());
@@ -51,10 +54,69 @@ class _VentaState extends State<Venta> {
       final p = Producto.desdeMapa(data);
       _agregarItemLogica(p);
     } else {
-      _mostrarDialogoCrearRapido(codigo.trim());
+      // ANTES: _mostrarDialogoCrearRapido(codigo.trim());
+      // AHORA: Abrimos directo el formulario sin preguntar
+      _abrirFormularioCreacionDirecta(codigo.trim());
     }
     _codigoController.clear();
+    // Nota: El focus se recupera mejor al cerrar el dialogo,
+    // pero lo dejamos aquí por si acaso.
+  }
+
+  // AGREGA ESTA NUEVA FUNCIÓN (Reemplaza a _mostrarDialogoCrearRapido si quieres, o déjala aparte)
+  Future<void> _abrirFormularioCreacionDirecta(String codigo) async {
+    await showDialog(
+        context: context,
+        builder: (c) => ProductFormDialog(
+            codigoInicial: codigo,
+            onGuardado: (nuevoProducto) {
+              _agregarItemLogica(nuevoProducto);
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Producto creado y agregado.")));
+            }
+        )
+    );
+    // Al volver del dialogo, recuperamos el foco
     _focusNode.requestFocus();
+  }
+
+// BUSCA LA FUNCIÓN: void _agregarItemLogica(Producto p)
+// REEMPLÁZALA CON ESTA (Sin validación de stock <= 0):
+
+  void _agregarItemLogica(Producto p) {
+    // ELIMINADO EL IF DE STOCK <= 0
+    // if (p.stock <= 0) { ... return; } <--- ESTO YA NO ESTÁ
+
+    int index = _carrito.indexWhere((item) => item.producto.id == p.id);
+    setState(() {
+      if (index != -1) {
+        // ELIMINADA LA RESTRICCIÓN DE STOCK MÁXIMO
+        // if (_carrito[index].cantidad < p.stock) ...
+        // AHORA SIMPLEMENTE SUMA:
+        _carrito[index].cantidad++;
+      } else {
+        _carrito.insert(0, ItemVenta(producto: p, cantidad: 1));
+      }
+      _calcularTotal();
+    });
+  }
+
+// BUSCA LA FUNCIÓN: void _cambiarCantidad(ItemVenta item, int delta)
+// REEMPLÁZALA CON ESTA (Sin restricción de tope):
+
+  void _cambiarCantidad(ItemVenta item, int delta) {
+    setState(() {
+      int nuevaCant = item.cantidad + delta;
+
+      // ELIMINADO BLOQUE DE VALIDACIÓN SUPERIOR
+      // if (nuevaCant > item.producto.stock) { ... return; }
+
+      if (nuevaCant < 1) {
+        _carrito.remove(item);
+      } else {
+        item.cantidad = nuevaCant;
+      }
+      _calcularTotal();
+    });
   }
 
   Future<void> _mostrarDialogoCrearRapido(String codigo) async {
@@ -146,43 +208,7 @@ class _VentaState extends State<Venta> {
     );
   }
 
-  void _agregarItemLogica(Producto p) {
-    if (p.stock <= 0) {
-      _alerta("Sin Stock", "El producto ${p.descripcion} no tiene existencias.");
-      return;
-    }
-    int index = _carrito.indexWhere((item) => item.producto.id == p.id);
-    setState(() {
-      if (index != -1) {
-        if (_carrito[index].cantidad < p.stock) {
-          _carrito[index].cantidad++;
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("No hay más stock de ${p.descripcion}"), duration: const Duration(milliseconds: 800)));
-        }
-      } else {
-        _carrito.insert(0, ItemVenta(producto: p, cantidad: 1));
-      }
-      _calcularTotal();
-    });
-  }
-
-  void _cambiarCantidad(ItemVenta item, int delta) {
-    setState(() {
-      int nuevaCant = item.cantidad + delta;
-      if (nuevaCant > item.producto.stock) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Stock insuficiente")));
-        return;
-      }
-      if (nuevaCant < 1) {
-        _carrito.remove(item);
-      } else {
-        item.cantidad = nuevaCant;
-      }
-      _calcularTotal();
-    });
-  }
-
-  Future<void> _abrirBusquedaManual() async {
+    Future<void> _abrirBusquedaManual() async {
     await showDialog(
       context: context,
       builder: (context) => DialogoBusquedaVenta(

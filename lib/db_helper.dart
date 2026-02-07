@@ -125,4 +125,13 @@ class DBHelper {
       whereArgs: [id],
     );
   }
+  Future<List<Map<String, dynamic>>> getProductosAgotados() async {
+    final db = await database;
+    // Trae productos donde el stock sea 0 o menor
+    return await db.query(
+      'productos',
+      where: 'stock <= 0',
+      orderBy: 'descripcion ASC',
+    );
+  }
 }

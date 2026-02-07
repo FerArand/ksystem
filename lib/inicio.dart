@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:excel/excel.dart';
 import 'package:path_provider/path_provider.dart';
+import 'agotados.dart';
 
 import 'constants/colores.dart';
 import 'db_helper.dart';
@@ -367,6 +368,7 @@ class _InicioState extends State<Inicio> {
       case 'deudas': return const Deudas(); // Nuevo Módulo Deudas
       case 'calendario': return const CalendarioVentas(); // Nuevo Módulo Calendario
       case 'anadir': return const NuevoIngreso();
+      case 'agotados': return const Agotados();
       case 'consultar': return const Productos();
       default: return const Venta();
     }
@@ -395,6 +397,7 @@ class _InicioState extends State<Inicio> {
                 _buildMenuItem(Icons.money_off, 'Deudas / Fiado', 'deudas'),
                 _buildMenuItem(Icons.calendar_month, 'Calendario', 'calendario'), // Reemplaza a Historial y Ventas Hoy
                 _buildMenuItem(Icons.add_circle_outline, 'Añadir', 'anadir'),
+                _buildMenuItem(Icons.warning_amber_rounded, 'Agotados', 'agotados'),
                 _buildMenuItem(Icons.list_alt, 'Consultar', 'consultar'),
 
                 const Divider(color: Colors.grey),
@@ -418,7 +421,7 @@ class _InicioState extends State<Inicio> {
                   padding: EdgeInsets.only(left: 20, bottom: 20),
                   child: Align(
                     alignment: Alignment.centerLeft,
-                    child: Text("v1.2.0", style: TextStyle(color: Colors.white30, fontSize: 12, fontWeight: FontWeight.bold)),
+                    child: Text("v1.3.0", style: TextStyle(color: Colors.white30, fontSize: 12, fontWeight: FontWeight.bold)),
                   ),
                 )
               ],
