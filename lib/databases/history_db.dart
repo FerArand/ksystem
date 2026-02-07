@@ -100,4 +100,47 @@ class HistoryDB {
     final db = await database;
     return await db.update('ventas_historial', {'cliente': nuevoNombre}, where: 'id = ?', whereArgs: [id]);
   }
+  // ... código existente ...
+
+  // 1. Obtener resumen de ventas de un MES completo (para pintar los cuadritos)
+  Future<List<Map<String, dynamic>>> obtenerVentasPorMes(int mes, int anio) async {
+    final db = await database;
+    // Filtramos por fecha string 'YYYY-MM-%'
+    String mesStr = mes.toString().padLeft(2, '0');
+    String fechaLike = "$anio-$mesStr-%";
+
+    return await db.rawQuery('''
+      SELECT 
+        substr(fecha, 1, 10) as fecha_dia, 
+        SUM(total) as total_venta,
+        SUM(costo_total) as total_costo
+      FROM ventas_historial
+      WHERE fecha LIKE ?
+      GROUP BY substr(fecha, 1, 10)
+    ''', [fechaLike]);
+  }
+
+  // 2. Obtener el producto más vendido del mes (Para la cabecera)
+  Future<Map<String, dynamic>?> obtenerProductoMasVendidoMes(int mes, int anio) async {
+    final db = await database;
+    String mesStr = mes.toString().padLeft(2, '0');
+    String fechaLike = "$anio-$mesStr-%";
+
+    // Nota: Esto requiere procesar el JSON de 'items' o tener una tabla detalle.
+    // Como guardas items en string "1x Prod | 2x Prod", hacer esto exacto en SQL es difícil sin normalizar.
+    // PARCHE: Por ahora, devolveremos el día con más ventas como "Dato Destacado"
+    // O si quieres el producto real, necesitaríamos cambiar cómo guardas los items a una tabla relacional.
+    // Asumiré por ahora que mostramos el "Día Récord" o implementamos un parsing manual rápido en Dart.
+    return null; // Lo calcularemos en Dart para no complicar la SQL con strings
+  }
+
+  // 3. Obtener ventas de UN DÍA específico (Tickets)
+  Future<List<Map<String, dynamic>>> obtenerVentasPorDia(String fechaYmd) async {
+    final db = await database;
+    return await db.query('ventas_historial',
+        where: "fecha LIKE ?",
+        whereArgs: ['$fechaYmd%'],
+        orderBy: "fecha DESC"
+    );
+  }
 }

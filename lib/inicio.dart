@@ -10,10 +10,8 @@ import 'models/producto.dart';
 import 'venta.dart';
 import 'productos.dart';
 import 'nuevo_ingreso.dart';
-
-import 'historial_ventas.dart';
-import 'ventas_hoy.dart';
-
+import 'deudas.dart'; // Módulo de Deudas
+import 'calendario_ventas.dart'; // Módulo Unificado de Calendario
 
 class Inicio extends StatefulWidget {
   const Inicio({Key? key}) : super(key: key);
@@ -27,7 +25,7 @@ class _InicioState extends State<Inicio> {
   bool _importando = false;
 
   // ------------------------------------------
-  // EXPORTAR A EXCEL
+  // EXPORTAR A EXCEL (TU CÓDIGO ORIGINAL)
   // ------------------------------------------
   Future<void> _exportarExcel() async {
     setState(() => _importando = true);
@@ -123,7 +121,7 @@ class _InicioState extends State<Inicio> {
   }
 
   // ------------------------------------------
-  // IMPORTAR DESDE EXCEL (REGLA 48% FIJO)
+  // IMPORTAR DESDE EXCEL (TU CÓDIGO ORIGINAL)
   // ------------------------------------------
   Future<void> _importarExcel() async {
     setState(() => _importando = true);
@@ -157,10 +155,6 @@ class _InicioState extends State<Inicio> {
             if (v == null) return 0.0;
             return double.tryParse(v.toString().replaceAll(RegExp(r'[^0-9.]'), '')) ?? 0.0;
           }
-          int intg(dynamic v) {
-            if (v == null) return 0;
-            return int.tryParse(v.toString().replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
-          }
 
           // LEER FILAS
           for (int r = 1; r < sheet.maxRows; r++) {
@@ -182,7 +176,6 @@ class _InicioState extends State<Inicio> {
             try {
               if (esFormatoApp) {
                 // FORMATO APP (9 columnas)
-                // Leemos todo EXCEPTO precio y rappi (cols 7 y 8)
                 codigo = str(val(row, 0));
                 stockStr = str(val(row, 1));
                 factura = str(val(row, 2));
@@ -190,18 +183,14 @@ class _InicioState extends State<Inicio> {
                 marca = str(val(row, 4));
                 descripcion = str(val(row, 5));
                 costo = dbl(val(row, 6));
-                // IGNORAMOS cols 7 y 8 del Excel
               } else {
                 // FORMATO ORIGINAL (8 columnas)
-                // Leemos todo EXCEPTO precio y rappi (cols 6 y 7)
                 stockStr = str(val(row, 0));
                 factura = str(val(row, 1));
                 sku = str(val(row, 2));
                 marca = str(val(row, 3));
                 descripcion = str(val(row, 4));
                 costo = dbl(val(row, 5));
-                // IGNORAMOS cols 6 y 7 del Excel
-
                 codigo = "GEN-${DateTime.now().millisecondsSinceEpoch}-$r";
               }
 
@@ -213,9 +202,6 @@ class _InicioState extends State<Inicio> {
                 precio = double.parse((costo * 1.48).toStringAsFixed(2));
                 // Rappi = Precio Público + 35%
                 rappi = double.parse((precio * 1.35).toStringAsFixed(2));
-              } else {
-                precio = 0.0;
-                rappi = 0.0;
               }
 
               int stock = int.tryParse(stockStr) ?? 0;
@@ -363,7 +349,7 @@ class _InicioState extends State<Inicio> {
     );
   }
 
-  // UI
+  // --- SELECCIÓN DE VISTAS (Aquí integramos los nuevos módulos) ---
   Widget _contenido() {
     if (_importando) {
       return const Center(child: Column(
@@ -378,10 +364,10 @@ class _InicioState extends State<Inicio> {
 
     switch (_seccionActual) {
       case 'venta': return const Venta();
+      case 'deudas': return const Deudas(); // Nuevo Módulo Deudas
+      case 'calendario': return const CalendarioVentas(); // Nuevo Módulo Calendario
       case 'anadir': return const NuevoIngreso();
       case 'consultar': return const Productos();
-      case 'ventas_hoy': return const VentasHoy();
-      case 'historial': return const HistorialVentas();
       default: return const Venta();
     }
   }
@@ -391,24 +377,29 @@ class _InicioState extends State<Inicio> {
     return Scaffold(
       body: Row(
         children: [
-          // MENÚ LATERAL
+          // --- BARRA LATERAL (Restaurada al estilo original) ---
           Container(
-            width: 220,
-            color: Colores.grisOscuro,
+            width: 230,
+            color: Colores.grisOscuro, // Usando tu color original
             child: Column(
               children: [
                 const SizedBox(height: 30),
+                // Logo textual (Sin "tiendita", estilo original)
                 const Text('KTOOLS', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold, letterSpacing: 2)),
                 const Text('Local System', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                const Text('By: Ferplace', style: TextStyle(color: Colors.grey, fontSize: 8)),
                 const SizedBox(height: 40),
 
+                // MENÚ PRINCIPAL
                 _buildMenuItem(Icons.point_of_sale, 'Venta', 'venta'),
-                _buildMenuItem(Icons.today, 'Ventas del Día', 'ventas_hoy'),
+                _buildMenuItem(Icons.money_off, 'Deudas / Fiado', 'deudas'),
+                _buildMenuItem(Icons.calendar_month, 'Calendario', 'calendario'), // Reemplaza a Historial y Ventas Hoy
                 _buildMenuItem(Icons.add_circle_outline, 'Añadir', 'anadir'),
                 _buildMenuItem(Icons.list_alt, 'Consultar', 'consultar'),
-                _buildMenuItem(Icons.history, 'Bitácora', 'historial'),
 
                 const Divider(color: Colors.grey),
+
+                // EXCEL (RESTAURADO)
                 ListTile(
                   leading: const Icon(Icons.upload_file, color: Colors.white70),
                   title: const Text('Importar Excel', style: TextStyle(color: Colors.white70, fontSize: 14)),
@@ -419,10 +410,22 @@ class _InicioState extends State<Inicio> {
                   title: const Text('Exportar Excel', style: TextStyle(color: Colors.white70, fontSize: 14)),
                   onTap: _exportarExcel,
                 ),
+
+                const Spacer(),
+
+                // --- VERSIÓN SOLICITADA ---
+                const Padding(
+                  padding: EdgeInsets.only(left: 20, bottom: 20),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text("v1.2.0", style: TextStyle(color: Colors.white30, fontSize: 12, fontWeight: FontWeight.bold)),
+                  ),
+                )
               ],
             ),
           ),
-          // CONTENIDO
+
+          // CONTENIDO PRINCIPAL
           Expanded(
             child: Container(
               color: Colors.grey[100],
