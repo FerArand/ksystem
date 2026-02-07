@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'databases/history_db.dart';
-import 'db_helper.dart'; // Importante para consultar el stock actual
+import 'db_helper.dart';
 import 'constants/colores.dart';
 import 'Utils/impresion_ticket.dart';
 import 'models/producto.dart';
-import 'venta.dart'; // Para ItemVenta
+import 'venta.dart';
 
 class CalendarioVentas extends StatefulWidget {
   const CalendarioVentas({Key? key}) : super(key: key);
@@ -17,8 +17,13 @@ class CalendarioVentas extends StatefulWidget {
 class _CalendarioVentasState extends State<CalendarioVentas> {
   DateTime _fechaActual = DateTime.now();
   Map<int, Map<String, double>> _datosDias = {};
+
+  // Datos estadísticos
   String _mejorProductoMes = "Calculando...";
   String _datoDestacado = "...";
+  String _topProductoNombre = "---";
+  int _topProductoCant = 0;
+
   bool _cargando = false;
 
   @override
@@ -28,8 +33,9 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
   }
 
   Future<void> _cargarDatosMes(DateTime fecha) async {
-    setState(() { _cargando = true; _datosDias.clear(); });
+    setState(() { _cargando = true; _datosDias.clear(); _topProductoNombre = "---"; });
 
+    // 1. OBTENER RESUMEN DIARIO
     final ventas = await HistoryDB.instance.obtenerVentasPorMes(fecha.month, fecha.year);
 
     Map<int, Map<String, double>> temp = {};
@@ -54,10 +60,50 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
       }
     }
 
+    // 2. OBTENER PRODUCTO TOP DEL MES
+    final db = await HistoryDB.instance.database;
+    final mesStr = fecha.month.toString().padLeft(2, '0');
+    final anioStr = fecha.year.toString();
+
+    final rawTickets = await db.query('ventas_historial',
+        columns: ['items'],
+        where: "fecha LIKE ? AND es_activo = 1",
+        whereArgs: ['$anioStr-$mesStr%']);
+
+    Map<String, int> conteoProductos = {};
+    for (var t in rawTickets) {
+      String itemsStr = t['items'] as String? ?? "";
+      List<String> lineas = itemsStr.split('|');
+      for (var linea in lineas) {
+        if (linea.trim().isEmpty) continue;
+        int cantidad = int.tryParse(RegExp(r'^(\d+)x').firstMatch(linea.trim())?.group(1) ?? "1") ?? 1;
+        String nombre = linea.replaceAll(RegExp(r'^\d+x'), '').replaceAll(RegExp(r'\[.*?\]'), '').trim();
+
+        if (conteoProductos.containsKey(nombre)) {
+          conteoProductos[nombre] = conteoProductos[nombre]! + cantidad;
+        } else {
+          conteoProductos[nombre] = cantidad;
+        }
+      }
+    }
+
+    String nombreTop = "Sin ventas";
+    int cantTop = 0;
+    if (conteoProductos.isNotEmpty) {
+      var sortedKeys = conteoProductos.keys.toList(growable: false)
+        ..sort((k1, k2) => conteoProductos[k2]!.compareTo(conteoProductos[k1]!));
+      if (sortedKeys.isNotEmpty) {
+        nombreTop = sortedKeys.first;
+        cantTop = conteoProductos[nombreTop]!;
+      }
+    }
+
     setState(() {
       _datosDias = temp;
       _mejorProductoMes = maxVenta > 0 ? "Día récord: $diaMejor" : "Sin ventas";
       _datoDestacado = "\$${maxVenta.toStringAsFixed(2)}";
+      _topProductoNombre = nombreTop;
+      _topProductoCant = cantTop;
       _fechaActual = fecha;
       _cargando = false;
     });
@@ -86,7 +132,6 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
 
       for (String linea in lineas) {
         if (linea.trim().isEmpty) continue;
-
         int cantidad = 1;
         final cantMatch = RegExp(r'^(\d+)x').firstMatch(linea.trim());
         if (cantMatch != null) cantidad = int.tryParse(cantMatch.group(1)!) ?? 1;
@@ -96,7 +141,6 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
         if (precioMatch != null) {
           precio = double.tryParse(precioMatch.group(1)!.replaceAll(RegExp(r'[^0-9.]'), '')) ?? 0.0;
         }
-
         String sku = "";
         final skuMatch = RegExp(r'\[SKU:(.*?)\]').firstMatch(linea);
         if (skuMatch != null) sku = skuMatch.group(1) ?? "";
@@ -131,12 +175,30 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
                   style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colores.azulPrincipal)),
               IconButton(icon: const Icon(Icons.arrow_forward_ios, color: Colors.blue), onPressed: () => _cambiarMes(1)),
               const SizedBox(width: 20),
+
               OutlinedButton.icon(
                 icon: const Icon(Icons.today),
                 label: const Text("Ir a Hoy"),
                 onPressed: () => _cargarDatosMes(DateTime.now()),
               ),
-              const Spacer(),
+
+              // SECCIÓN PRODUCTO DEL MES
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      const Text("PRODUCTO DEL MES", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1.2)),
+                      Text(_topProductoNombre,
+                          maxLines: 1, overflow: TextOverflow.ellipsis,
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.blueGrey[800])),
+                      Text("$_topProductoCant unidades vendidas", style: const TextStyle(fontSize: 11, color: Colors.blue)),
+                    ],
+                  ),
+                ),
+              ),
+
               _recordCard(),
             ],
           ),
@@ -204,16 +266,24 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
         while (celdasFila.length < 7) {
           celdasFila.add(Expanded(child: Container(decoration: BoxDecoration(border: Border.all(color: Colors.grey[100]!)))));
         }
+
+        // --- CELDA TOTAL SEMANAL (Estilo Clásico Azul + Números Grandes) ---
         celdasFila.add(Expanded(
           flex: 2,
           child: Container(
             margin: const EdgeInsets.all(4),
-            decoration: BoxDecoration(color: Colors.blue[50], borderRadius: BorderRadius.circular(4)),
+            decoration: BoxDecoration(
+              color: Colors.blue[50],
+              borderRadius: BorderRadius.circular(4),
+            ),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text("\$${semVenta.toStringAsFixed(0)}", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blue)),
-                Text("G: \$${semGan.toStringAsFixed(0)}", style: TextStyle(fontSize: 11, color: Colors.green[800])),
+                const Text("SEMANA", style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.blueGrey)),
+                Text("\$${semVenta.toStringAsFixed(0)}",
+                    style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: Colors.blue)),
+                Text("G: \$${semGan.toStringAsFixed(0)}",
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.green[800])),
               ],
             ),
           ),
@@ -227,11 +297,32 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
 
   Widget _buildCeldaDia(int dia, double venta, double ganancia) {
     bool esHoy = dia == DateTime.now().day && _fechaActual.month == DateTime.now().month && _fechaActual.year == DateTime.now().year;
-    return Card(
-      color: esHoy ? Colors.amber[50] : Colors.white,
-      elevation: venta > 0 ? 2 : 0,
+
+    // Decoración simple: Blanco con borde sutil si hay ventas, o sin borde si no
+    BoxDecoration decoration;
+    if (esHoy) {
+      decoration = BoxDecoration(
+          color: Colors.amber[50],
+          borderRadius: BorderRadius.circular(4),
+          border: Border.all(color: Colors.orange, width: 2)
+      );
+    } else if (venta > 0) {
+      decoration = BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(4),
+          border: Border.all(color: Colors.grey.shade300)
+      );
+    } else {
+      decoration = BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(4),
+          border: Border.all(color: Colors.grey.shade100)
+      );
+    }
+
+    return Container(
       margin: const EdgeInsets.all(2),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4), side: BorderSide(color: esHoy ? Colors.orange : Colors.grey.shade200)),
+      decoration: decoration,
       child: InkWell(
         onTap: () => _abrirDetalleDia(dia),
         child: Padding(
@@ -239,13 +330,25 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(dia.toString(), style: TextStyle(fontWeight: FontWeight.bold, color: esHoy ? Colors.orange[800] : Colors.black)),
+              // NÚMERO DE DÍA (Pequeño)
+              Text(
+                  dia.toString(),
+                  style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                      color: esHoy ? Colors.orange[900] : Colors.grey[700]
+                  )
+              ),
               if (venta > 0) ...[
                 const Spacer(),
-                Center(child: Text("\$${venta.toStringAsFixed(0)}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13))),
-                Center(child: Text("+\$${ganancia.toStringAsFixed(0)}", style: const TextStyle(fontSize: 10, color: Colors.green))),
+                // VENTAS (Grande)
+                Center(child: Text("\$${venta.toStringAsFixed(0)}",
+                    style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: Colors.black87))),
+                // GANANCIAS (Mediano)
+                Center(child: Text("+\$${ganancia.toStringAsFixed(0)}",
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.green[800]))),
                 const Spacer(),
-                const Align(alignment: Alignment.center, child: Icon(Icons.visibility, size: 14, color: Colors.blue))
+                const Align(alignment: Alignment.center, child: Icon(Icons.visibility, size: 14, color: Colors.blueGrey))
               ]
             ],
           ),
@@ -332,7 +435,7 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
     );
   }
 
-  // --- BITÁCORA DE TICKETS (CON SKU VISIBLE) ---
+  // --- BITÁCORA DE TICKETS ---
   Widget _buildListaTickets(List<Map<String, dynamic>> tickets) {
     if (tickets.isEmpty) return const Center(child: Text("Sin movimientos."));
     return ListView.separated(
@@ -345,21 +448,34 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
         List<String> itemsList = t['items'].toString().split('|');
 
         List<Widget> itemWidgets = itemsList.where((x) => x.isNotEmpty).map((item) {
-          String sku = RegExp(r'\[SKU:(.*?)\]').firstMatch(item)?.group(1) ?? "N/A";
-          String nombre = item.replaceAll(RegExp(r'\[.*?\]'), '').trim();
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 2),
-            child: RichText(text: TextSpan(style: const TextStyle(color: Colors.black87, fontSize: 13), children: [
-              const TextSpan(text: "• "),
-              TextSpan(text: nombre, style: const TextStyle(fontWeight: FontWeight.w500)),
-              TextSpan(text: " [SKU: $sku]", style: TextStyle(color: Colors.blue[700], fontSize: 11, fontWeight: FontWeight.bold)),
-            ])),
+          String nombreRaw = item.replaceAll(RegExp(r'^\d+x'), '').replaceAll(RegExp(r'\[.*?\]'), '').trim();
+          String skuRaw = RegExp(r'\[SKU:(.*?)\]').firstMatch(item)?.group(1) ?? "";
+
+          return FutureBuilder<Map<String, dynamic>?>(
+            future: _buscarProductoLive(nombreRaw, skuRaw),
+            builder: (context, snapshot) {
+              String skuDisplay = skuRaw;
+              if (snapshot.hasData && snapshot.data != null) {
+                if (skuDisplay.isEmpty || skuDisplay == "N/A") {
+                  skuDisplay = snapshot.data!['sku'] ?? snapshot.data!['codigo'] ?? "N/A";
+                }
+              }
+
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 2),
+                child: RichText(text: TextSpan(style: const TextStyle(color: Colors.black87, fontSize: 13), children: [
+                  const TextSpan(text: "• "),
+                  TextSpan(text: nombreRaw, style: const TextStyle(fontWeight: FontWeight.w500)),
+                  TextSpan(text: " [SKU: $skuDisplay]", style: TextStyle(color: Colors.blue[700], fontSize: 11, fontWeight: FontWeight.bold)),
+                ])),
+              );
+            },
           );
         }).toList();
 
         return ListTile(
           leading: const CircleAvatar(backgroundColor: Colors.blueGrey, child: Icon(Icons.receipt, color: Colors.white)),
-          title: Text("Folio #${t['folio'] ?? t['id']}  •  $hora hrs", style: const TextStyle(fontWeight: FontWeight.bold)),
+          title: Text("Folio #${t['folio_venta'] ?? t['id']}  •  $hora hrs", style: const TextStyle(fontWeight: FontWeight.bold)),
           subtitle: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const SizedBox(height: 5), ...itemWidgets]),
           trailing: Row(
             mainAxisSize: MainAxisSize.min,
@@ -373,28 +489,37 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
     );
   }
 
-  // --- RESUMEN DE PRODUCTOS (Lotes, Finanzas y Stock Actual) ---
+  // --- RESUMEN DE PRODUCTOS ---
   Widget _buildResumenProductos(List<Map<String, dynamic>> tickets) {
     if (tickets.isEmpty) return const Center(child: Text("Sin ventas."));
 
     Map<String, dynamic> consolidado = {};
+
     for (var t in tickets) {
       for (String linea in (t['items'] ?? "").toString().split('|')) {
         if (linea.trim().isEmpty) continue;
 
-        int cant = int.tryParse(RegExp(r'^(\d+)x').firstMatch(linea)?.group(1) ?? "1") ?? 1;
+        int cant = int.tryParse(RegExp(r'^(\d+)x').firstMatch(linea.trim())?.group(1) ?? "1") ?? 1;
         double pUnit = double.tryParse(RegExp(r'\[P:(.*?)\]').firstMatch(linea)?.group(1)?.replaceAll(RegExp(r'[^0-9.]'), '') ?? "0") ?? 0;
         double cUnit = double.tryParse(RegExp(r'\[C:(.*?)\]').firstMatch(linea)?.group(1)?.replaceAll(RegExp(r'[^0-9.]'), '') ?? "0") ?? 0;
+
         String sku = RegExp(r'\[SKU:(.*?)\]').firstMatch(linea)?.group(1) ?? "";
         String nombre = linea.replaceAll(RegExp(r'^\d+x'), '').replaceAll(RegExp(r'\[.*?\]'), '').trim();
 
-        String key = sku.isNotEmpty ? sku : nombre;
+        String key = nombre;
+
         if (consolidado.containsKey(key)) {
           consolidado[key]['cant'] += cant;
           consolidado[key]['bruto'] += (pUnit * cant);
-          consolidado[key]['costo'] += (cUnit * cant);
+          consolidado[key]['costo_acumulado'] = (consolidado[key]['costo_acumulado'] ?? 0.0) + (cUnit * cant);
         } else {
-          consolidado[key] = {'nombre': nombre, 'sku': sku, 'cant': cant, 'bruto': (pUnit * cant), 'costo': (cUnit * cant)};
+          consolidado[key] = {
+            'nombre': nombre,
+            'sku_historico': sku,
+            'cant': cant,
+            'bruto': (pUnit * cant),
+            'costo_acumulado': (cUnit * cant)
+          };
         }
       }
     }
@@ -406,31 +531,67 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
       itemCount: lista.length,
       itemBuilder: (ctx, i) {
         final item = lista[i];
+
         return FutureBuilder<Map<String, dynamic>?>(
-          future: DBHelper.instance.getProductoPorCodigo(item['sku']),
+          future: _buscarProductoLive(item['nombre'], item['sku_historico']),
           builder: (context, snap) {
-            String stock = snap.hasData ? snap.data!['stock'].toString() : "...";
+
+            String stock = "...";
+            String skuFinal = item['sku_historico'];
+            double costoFinal = 0.0;
+            double precioPublico = 0.0;
+
+            if (snap.hasData && snap.data != null) {
+              final prodDB = snap.data!;
+              stock = prodDB['stock'].toString();
+              precioPublico = (prodDB['precio'] as num).toDouble();
+
+              if (skuFinal.isEmpty || skuFinal == "N/A") {
+                skuFinal = prodDB['sku'] ?? prodDB['codigo'] ?? "N/A";
+              }
+
+              if ((item['costo_acumulado'] as double) > 0) {
+                costoFinal = item['costo_acumulado'];
+              } else {
+                double costoUnitarioReal = (prodDB['costo'] as num).toDouble();
+                costoFinal = costoUnitarioReal * (item['cant'] as int);
+              }
+            } else {
+              costoFinal = item['costo_acumulado'];
+            }
+
+            double ventaFinal = (item['bruto'] as double);
+            if (ventaFinal == 0 && precioPublico > 0) {
+              ventaFinal = precioPublico * (item['cant'] as int);
+            }
+
+            double ganancia = ventaFinal - costoFinal;
+
             return Card(
               margin: const EdgeInsets.only(bottom: 10),
               child: ListTile(
-                leading: CircleAvatar(child: Text("${item['cant']}")),
+                leading: CircleAvatar(
+                    backgroundColor: Colores.azulPrincipal,
+                    child: Text("${item['cant']}", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold))
+                ),
                 title: Text(item['nombre'], style: const TextStyle(fontWeight: FontWeight.bold)),
                 subtitle: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    const SizedBox(height: 4),
                     Row(
                       children: [
-                        _tag("SKU: ${item['sku']}", Colors.blue),
+                        _tag("SKU: $skuFinal", Colors.blue),
                         const SizedBox(width: 10),
-                        _tag("STOCK ACTUAL: $stock", Colors.orange),
+                        _tag("STOCK ACTUAL: $stock", int.tryParse(stock) != null && int.parse(stock) < 5 ? Colors.red : Colors.orange),
                       ],
                     ),
-                    const SizedBox(height: 5),
+                    const SizedBox(height: 8),
                     Row(
                       children: [
-                        _miniDato("COSTO", item['costo'], Colors.red),
-                        _miniDato("BRUTO", item['bruto'], Colors.black),
-                        _miniDato("NETO", item['bruto'] - item['costo'], Colors.green),
+                        _miniDato("COSTO", costoFinal, Colors.red),
+                        _miniDato("VENTA", ventaFinal, Colors.black),
+                        _miniDato("GANANCIA", ganancia, Colors.green),
                       ],
                     )
                   ],
@@ -443,17 +604,32 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
     );
   }
 
+  Future<Map<String, dynamic>?> _buscarProductoLive(String nombre, String? sku) async {
+    if (sku != null && sku.isNotEmpty && sku != "N/A") {
+      var res = await DBHelper.instance.getProductoPorCodigo(sku);
+      if (res != null) return res;
+    }
+    var resultados = await DBHelper.instance.buscarProductos(nombre);
+    if (resultados.isNotEmpty) {
+      return resultados.first;
+    }
+    return null;
+  }
+
   Widget _tag(String txt, MaterialColor col) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-    decoration: BoxDecoration(color: col[50], borderRadius: BorderRadius.circular(4), border: Border.all(color: col.shade100)),
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+    decoration: BoxDecoration(color: col[50], borderRadius: BorderRadius.circular(4), border: Border.all(color: col.shade200)),
     child: Text(txt, style: TextStyle(fontSize: 10, color: col[900], fontWeight: FontWeight.bold)),
   );
 
   Widget _miniDato(String lab, double val, Color col) => Padding(
     padding: const EdgeInsets.only(right: 15),
-    child: RichText(text: TextSpan(style: const TextStyle(fontSize: 12), children: [
-      TextSpan(text: "$lab: ", style: const TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
-      TextSpan(text: "\$${val.toStringAsFixed(2)}", style: TextStyle(color: col, fontWeight: FontWeight.bold)),
-    ])),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(lab, style: const TextStyle(fontSize: 9, color: Colors.grey, fontWeight: FontWeight.bold)),
+        Text("\$${val.toStringAsFixed(2)}", style: TextStyle(color: col, fontWeight: FontWeight.bold, fontSize: 13)),
+      ],
+    ),
   );
 }

@@ -113,7 +113,7 @@ class ImpresionTicket {
                 pw.Text('Este no es comprobante fiscal', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8)),
                 pw.SizedBox(height: 5),
                 pw.Text(
-                  'KTOOLS no asume responsabilidad por daños derivados de una instalación incorrecta, negligencia o variaciones de voltaje.',
+                  '15 días de garantía por defecto de fábrica. No cubre daños por mala instalación o uso. En electrónicos no se aceptan cambios ni devoluciones.',
                   textAlign: pw.TextAlign.center,
                   style: const pw.TextStyle(fontSize: 6), 
                 ),
