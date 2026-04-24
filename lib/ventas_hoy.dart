@@ -65,8 +65,10 @@ class _VentasHoyState extends State<VentasHoy> {
             TextButton(onPressed: ()=>Navigator.pop(ctx), child: const Text("Cancelar")),
             ElevatedButton(
                 onPressed: () async {
-                  String nombre = _ctrl.text.trim().isEmpty ? "Cliente General" : _ctrl.text.trim();
+                  String nombre = _ctrl.text.trim().isEmpty
+                      ? "Cliente General" : _ctrl.text.trim();
                   await HistoryDB.instance.asignarNombreCliente(id, nombre);
+                  if (!mounted) return;
                   _cargarVentasDelDia();
                   Navigator.pop(ctx);
                 },

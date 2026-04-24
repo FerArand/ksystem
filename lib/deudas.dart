@@ -146,14 +146,20 @@ class _DeudasState extends State<Deudas> {
           actions: [
             TextButton(onPressed: ()=>Navigator.pop(ctx), child: const Text("Cerrar")),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: Colores.azulPrincipal, foregroundColor: Colors.white),
               onPressed: () async {
                 double abono = double.tryParse(abonoCtrl.text) ?? 0;
                 if (abono > 0) {
                   await DebtDB.instance.abonar(deudor['id'], abono);
+
+                  // Verificamos que el widget siga vivo antes de tocar
+                  // cualquier cosa relacionada con el árbol de widgets.
+                  if (!mounted) return;
+
                   _cargarDeudores();
                   Navigator.pop(ctx);
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Abono registrado correctamente")));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text("Abono registrado correctamente")),
+                  );
                 }
               },
               child: const Text("REGISTRAR ABONO"),

@@ -22,7 +22,6 @@ class _ProductosRecientesState extends State<ProductosRecientes> {
   }
 
   Future<void> _cargar() async {
-    // 1. Obtener IDs de la BD de recientes
     final codigos = await RecentDB.instance.obtenerCodigosRecientes();
 
     if (codigos.isEmpty) {
@@ -30,15 +29,14 @@ class _ProductosRecientesState extends State<ProductosRecientes> {
       return;
     }
 
-    // 2. Buscar los detalles completos en la BD principal
-    // (Sqflite no soporta WHERE IN con arrays directos fácilmente, hacemos un loop o query manual)
-    List<Producto> temp = [];
-    for (String cod in codigos) {
-      final data = await DBHelper.instance.getProductoPorCodigo(cod);
-      if (data != null) {
-        temp.add(Producto.desdeMapa(data));
-      }
-    }
+    final resultados = await Future.wait(
+      codigos.map((codigo) => DBHelper.instance.getProductoPorCodigo(codigo)),
+    );
+
+    final temp = resultados
+        .whereType<Map<String, dynamic>>()
+        .map(Producto.desdeMapa)
+        .toList();
 
     setState(() {
       _listaRecientes = temp;

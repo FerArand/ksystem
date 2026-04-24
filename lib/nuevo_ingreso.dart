@@ -30,14 +30,18 @@ class _NuevoIngresoState extends State<NuevoIngreso> {
   // --- CARGA DE DATOS (Recientes) ---
   Future<void> _cargarMemoriaReciente() async {
     final codigos = await RecentDB.instance.obtenerCodigosRecientes();
-    List<Producto> recuperados = [];
 
-    for (String codigo in codigos) {
-      final data = await DBHelper.instance.getProductoPorCodigo(codigo);
-      if (data != null) {
-        recuperados.add(Producto.desdeMapa(data));
-      }
-    }
+    // Lanzamos TODAS las queries al mismo tiempo
+    // y esperamos a que terminen en paralelo.
+    final resultados = await Future.wait(
+      codigos.map((codigo) => DBHelper.instance.getProductoPorCodigo(codigo)),
+    );
+
+    // Filtramos los nulls (productos que ya no existen en BD)
+    final recuperados = resultados
+        .whereType<Map<String, dynamic>>()
+        .map(Producto.desdeMapa)
+        .toList();
 
     if (mounted) {
       setState(() {
