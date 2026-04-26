@@ -4,7 +4,6 @@ import 'package:path/path.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import '../databases/app_database.dart';
 
 class MigrationService {
@@ -16,19 +15,49 @@ class MigrationService {
     final prefs = await SharedPreferences.getInstance();
     final yaMigrado = prefs.getBool(_flagKey) ?? false;
 
-    if (yaMigrado) return; // Nada que hacer
+    final docsDir = await getApplicationDocumentsDirectory();
+    final hayArchivosViejos = await _existenArchivosViejos(docsDir.path);
 
-    debugPrint('[Migración] Iniciando migración de datos...');
+    // Si ya se marcó como migrado Y NO hay archivos viejos, realmente terminamos.
+    if (yaMigrado && !hayArchivosViejos) {
+      debugPrint('[Migración] Estado: Ya migrado y sin archivos pendientes.');
+      return;
+    }
+
+    // Si no hay archivos viejos y no se ha marcado el flag, lo marcamos para no buscar más.
+    // Esto es para instalaciones nuevas que nunca tuvieron las BD viejas.
+    if (!hayArchivosViejos && !yaMigrado) {
+      debugPrint('[Migración] Estado: Instalación nueva, marcando flag de migración.');
+      await prefs.setBool(_flagKey, true);
+      return;
+    }
+
+    // Si llegamos aquí, es porque hay archivos viejos (o no se ha marcado el flag)
+    debugPrint('[Migración] Iniciando migración (Archivos: $hayArchivosViejos, Flag: $yaMigrado)...');
 
     try {
       await _migrar();
       await prefs.setBool(_flagKey, true); // Solo se activa si _migrar() no lanzó excepción
       debugPrint('[Migración] Completada exitosamente.');
     } catch (e) {
-      // NO ponemos el flag. El próximo arranque lo reintentará.
+      // NO ponemos el flag si falló algo crítico.
       debugPrint('[Migración] FALLÓ: $e');
-      rethrow; // Dejar que main.dart lo maneje y muestre error al usuario
+      rethrow; 
     }
+  }
+
+  static Future<bool> _existenArchivosViejos(String dirPath) async {
+    final archivos = [
+      'ksystem_local.db',
+      'ksystem_history_v2.db',
+      'ksystem_debts.db',
+      'ksystem_recent.db',
+    ];
+    
+    for (final nombre in archivos) {
+      if (await File(join(dirPath, nombre)).exists()) return true;
+    }
+    return false;
   }
 
   static Future<void> _migrar() async {
