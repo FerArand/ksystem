@@ -118,6 +118,36 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
 
   Future<void> _reimprimir(Map<String, dynamic> ticketData) async {
     try {
+      final String cliente = ticketData['cliente']?.toString() ?? "";
+
+      if (cliente.startsWith('Abono a deuda de:')) {
+        final String nombre = cliente.replaceFirst('Abono a deuda de: ', '').trim();
+        final String itemsString = ticketData['items'] ?? "[]";
+        final items = modelo.ItemVenta.listaDesdeString(itemsString);
+        final double montoAbonado = (ticketData['total'] as num).toDouble();
+
+        // Buscamos si el deudor aún existe para mostrar saldo real
+        final db = await AppDatabase.instance.database;
+        final res = await db.query('deudores', where: 'nombre = ?', whereArgs: [nombre]);
+
+        double saldoRestante = 0;
+        double deudaAnterior = montoAbonado;
+
+        if (res.isNotEmpty) {
+          saldoRestante = (res.first['total_deuda'] as num).toDouble();
+          deudaAnterior = saldoRestante + montoAbonado;
+        }
+
+        await ImpresionTicket.imprimirTicketAbono(
+          nombreDeudor: nombre,
+          items: items,
+          montoAbonado: montoAbonado,
+          deudaAnterior: deudaAnterior,
+          saldoRestante: saldoRestante,
+        );
+        return;
+      }
+
       double total = (ticketData['total'] is int) ? (ticketData['total'] as int).toDouble() : ticketData['total'];
       
       // Intentar leer recibido y cambio guardados, si no existen (ventas viejas) usar lógica por defecto
@@ -519,28 +549,39 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
         final itemsParseados = modelo.ItemVenta.listaDesdeString(t['items'] ?? "");
 
         // 2. Mapeamos directamente usando las propiedades del objeto
-        List<Widget> itemWidgets = itemsParseados.map((item) {
-          return FutureBuilder<Map<String, dynamic>?>(
-            future: _buscarProductoLive(item.descripcion, item.sku),
-            builder: (context, snapshot) {
-              String skuDisplay = item.sku;
-              if (snapshot.hasData && snapshot.data != null) {
-                if (skuDisplay.isEmpty || skuDisplay == "N/A") {
-                  skuDisplay = snapshot.data!['sku'] ?? snapshot.data!['codigo'] ?? "N/A";
-                }
-              }
+        List<Widget> itemWidgets;
 
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 2),
-                child: RichText(text: TextSpan(style: const TextStyle(color: Colors.black87, fontSize: 13), children: [
-                  TextSpan(text: "${item.cantidad}x "), // Directo del objeto
-                  TextSpan(text: item.descripcion, style: const TextStyle(fontWeight: FontWeight.w500)), // Directo del objeto
-                  TextSpan(text: " [SKU: $skuDisplay]", style: TextStyle(color: Colors.blue[700], fontSize: 11, fontWeight: FontWeight.bold)),
-                ])),
-              );
-            },
-          );
-        }).toList();
+        if (t['cliente'].toString().startsWith('Abono a deuda de:')) {
+          itemWidgets = [
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(t['cliente'], style: const TextStyle(fontStyle: FontStyle.italic, color: Colors.blueGrey, fontWeight: FontWeight.bold)),
+            )
+          ];
+        } else {
+          itemWidgets = itemsParseados.map((item) {
+            return FutureBuilder<Map<String, dynamic>?>(
+              future: _buscarProductoLive(item.descripcion, item.sku),
+              builder: (context, snapshot) {
+                String skuDisplay = item.sku;
+                if (snapshot.hasData && snapshot.data != null) {
+                  if (skuDisplay.isEmpty || skuDisplay == "N/A") {
+                    skuDisplay = snapshot.data!['sku'] ?? snapshot.data!['codigo'] ?? "N/A";
+                  }
+                }
+
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 2),
+                  child: RichText(text: TextSpan(style: const TextStyle(color: Colors.black87, fontSize: 13), children: [
+                    TextSpan(text: "${item.cantidad}x "), // Directo del objeto
+                    TextSpan(text: item.descripcion, style: const TextStyle(fontWeight: FontWeight.w500)), // Directo del objeto
+                    TextSpan(text: " [SKU: $skuDisplay]", style: TextStyle(color: Colors.blue[700], fontSize: 11, fontWeight: FontWeight.bold)),
+                  ])),
+                );
+              },
+            );
+          }).toList();
+        }
 
         return ListTile(
           leading: const CircleAvatar(backgroundColor: Colors.blueGrey, child: Icon(Icons.receipt, color: Colors.white)),
@@ -563,13 +604,26 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
     if (tickets.isEmpty) return const Center(child: Text("Sin ventas."));
 
     Map<String, dynamic> consolidado = {};
+    Map<String, dynamic> abonos = {};
 
     for (var t in tickets) {
-      // 1. Convertimos todo a lista de objetos mágicamente
+      if (t['cliente'].toString().startsWith('Abono a deuda de:')) {
+        String concepto = t['cliente'];
+        if (abonos.containsKey(concepto)) {
+          abonos[concepto]['bruto'] += (t['total'] as num).toDouble();
+        } else {
+          abonos[concepto] = {
+            'nombre': concepto,
+            'bruto': (t['total'] as num).toDouble(),
+            'es_abono': true
+          };
+        }
+        continue;
+      }
+
       final itemsParseados = modelo.ItemVenta.listaDesdeString(t['items'] ?? "");
 
       for (var item in itemsParseados) {
-        // 2. Ya no calculamos nada, tomamos las variables directas
         String key = item.descripcion;
 
         if (consolidado.containsKey(key)) {
@@ -588,13 +642,29 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
       }
     }
 
-    var lista = consolidado.values.toList()..sort((a, b) => b['bruto'].compareTo(a['bruto']));
+    var lista = consolidado.values.toList()..addAll(abonos.values.toList());
+    lista.sort((a, b) => b['bruto'].compareTo(a['bruto']));
 
     return ListView.builder(
       padding: const EdgeInsets.all(20),
       itemCount: lista.length,
       itemBuilder: (ctx, i) {
         final item = lista[i];
+
+        if (item['es_abono'] == true) {
+          return Card(
+            margin: const EdgeInsets.only(bottom: 10),
+            child: ListTile(
+              leading: const CircleAvatar(
+                  backgroundColor: Colors.green,
+                  child: Icon(Icons.payments, color: Colors.white)
+              ),
+              title: Text(item['nombre'], style: const TextStyle(fontWeight: FontWeight.bold)),
+              subtitle: Text("INGRESO POR ABONO: \$${item['bruto'].toStringAsFixed(2)}",
+                  style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green, fontSize: 16)),
+            ),
+          );
+        }
 
         return FutureBuilder<Map<String, dynamic>?>(
           future: _buscarProductoLive(item['nombre'], item['sku_historico']),
