@@ -1,6 +1,8 @@
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:path/path.dart';
 import 'package:path_provider/path_provider.dart';
+import 'dart:convert';
+import 'package:flutter/foundation.dart';
 
 class AppDatabase {
   static final AppDatabase instance = AppDatabase._init();
@@ -21,10 +23,80 @@ class AppDatabase {
     // incrementas la versión y usas onUpgrade.
     return await openDatabase(
       path,
-      version: 1,
+      version: 2, // ← sube de 1 a 2
       onCreate: _createDB,
+      onUpgrade: onUpgrade, // ← nuevo
     );
   }
+
+    Future onUpgrade(Database db, int oldVersion, int newVersion) async {
+      if (oldVersion < 2) {
+        await migrarItemsAJson(db);
+      }
+    }
+
+    Future migrarItemsAJson(Database db) async {
+      debugPrint('[AppDB] Migrando items a JSON...');
+
+      // --- ventas_historial ---
+      final ventas = await db.query('ventas_historial');
+      for (final venta in ventas) {
+        final raw = venta['items'] as String? ?? '';
+
+        // Si ya es JSON, no tocar
+        if (raw.trimLeft().startsWith('[')) continue;
+
+        final itemsJson = convertirPipeAJson(raw);
+        await db.update(
+          'ventas_historial',
+          {'items': itemsJson},
+          where: 'id = ?',
+          whereArgs: [venta['id']],
+        );
+      }
+      debugPrint('[AppDB] ventas_historial migradas: ${ventas.length} filas');
+
+      // --- deudores ---
+      final deudores = await db.query('deudores');
+      for (final deudor in deudores) {
+        final raw = deudor['items'] as String? ?? '';
+        if (raw.trimLeft().startsWith('[')) continue;
+
+        final itemsJson = convertirPipeAJson(raw);
+        await db.update(
+          'deudores',
+          {'items': itemsJson},
+          where: 'id = ?',
+          whereArgs: [deudor['id']],
+        );
+      }
+      debugPrint('[AppDB] deudores migrados: ${deudores.length} filas');
+    }
+
+// Convierte "3x Cemento [SKU:C01][P:120.0][C:80.0]|1x Llana..."
+// a   "[{"sku":"C01","descripcion":"Cemento","cantidad":3,...}]"
+    String convertirPipeAJson(String raw) {
+      if (raw.isEmpty) return '[]';
+
+      final items = raw.split('|').where((s) => s.isNotEmpty).map((s) {
+        final skuMatch    = RegExp(r'\[SKU:(.*?)\]').firstMatch(s);
+        final precioMatch = RegExp(r'\[P:(.*?)\]').firstMatch(s);
+        final costoMatch  = RegExp(r'\[C:(.*?)\]').firstMatch(s);
+        final cantMatch   = RegExp(r'^(\d+)x').firstMatch(s.trim());
+        final descripcion = s.replaceAll(RegExp(r'\[.*?\]'), '')
+            .replaceAll(RegExp(r'^\d+x'), '').trim();
+        return {
+          'sku':         skuMatch?.group(1)    ?? '',
+          'descripcion': descripcion,
+          'cantidad':    int.tryParse(cantMatch?.group(1) ?? '1') ?? 1,
+          'precio':      double.tryParse(precioMatch?.group(1) ?? '0') ?? 0.0,
+          'costo':       double.tryParse(costoMatch?.group(1)  ?? '0') ?? 0.0,
+        };
+      }).toList();
+
+      return jsonEncode(items);
+    }
+
 
   Future _createDB(Database db, int version) async {
     // TODAS las tablas en un solo lugar.

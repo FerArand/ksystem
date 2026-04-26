@@ -1,39 +1,43 @@
 import 'app_database.dart';
+import 'package:sqflite/sqflite.dart';
+import '../models/item_venta.dart'; // Asegúrate de añadir este import arriba
 
 class DebtDB {
   static final DebtDB instance = DebtDB._init();
+  DebtDB._init();
 
   Future<Database> get _db async => AppDatabase.instance.database;
 
   // Crear o Actualizar Deudor (Sumar a la cuenta)
-  Future<void> actualizarDeuda(String nombre, String nuevosItems, double montoAdicional) async {
+
+
+  Future<void> actualizarDeuda(String nombre, String nuevosItemsJson, double montoAdicional) async {
     final db = await _db;
     final fecha = DateTime.now().toString();
-
-    // Buscamos si ya existe
     final res = await db.query('deudores', where: 'nombre = ?', whereArgs: [nombre]);
 
     if (res.isNotEmpty) {
-      // YA EXISTE: SUMAMOS
       final actual = res.first;
       double totalActual = actual['total_deuda'] as double;
       String itemsActuales = actual['items'] as String;
 
-      // Concatenamos los items nuevos
-      String itemsFinal = "$itemsActuales|$nuevosItems";
+      // USAMOS JSON: Combinamos las listas de items
+      List<ItemVenta> listaFinal = ItemVenta.listaDesdeString(itemsActuales);
+      listaFinal.addAll(ItemVenta.listaDesdeString(nuevosItemsJson));
+
+      String jsonFinal = ItemVenta.listaAJson(listaFinal);
       double totalFinal = totalActual + montoAdicional;
 
       await db.update('deudores', {
-        'items': itemsFinal,
+        'items': jsonFinal,
         'total_deuda': totalFinal,
         'fecha_ultimo_fiado': fecha
       }, where: 'id = ?', whereArgs: [actual['id']]);
 
     } else {
-      // NUEVO DEUDOR
       await db.insert('deudores', {
         'nombre': nombre,
-        'items': nuevosItems,
+        'items': nuevosItemsJson,
         'total_deuda': montoAdicional,
         'fecha_ultimo_fiado': fecha
       });

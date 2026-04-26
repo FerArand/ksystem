@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'db_helper.dart';
 import 'models/producto.dart';
-import 'constants/colores.dart';
 import 'widgets/product_form_dialog.dart';
+import 'widgets/product_card.dart';
 
 class Agotados extends StatefulWidget {
   const Agotados({Key? key}) : super(key: key);
@@ -69,75 +69,12 @@ class _AgotadosState extends State<Agotados> {
             itemCount: _listaAgotados.length,
             itemBuilder: (ctx, i) {
               final p = _listaAgotados[i];
-              return Card(
-                elevation: 3,
-                margin: const EdgeInsets.symmetric(vertical: 6),
-                child: Padding(
-                  padding: const EdgeInsets.all(12.0),
-                  child: Column(
-                    children: [
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(p.descripcion, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                                const SizedBox(height: 4),
-                                Text("Código: ${p.codigo} | SKU: ${p.sku}", style: TextStyle(color: Colors.grey[700], fontSize: 12)),
-                                Text("Marca: ${p.marca}", style: TextStyle(color: Colors.grey[700], fontSize: 12)),
-                              ],
-                            ),
-                          ),
-                          Column(
-                            children: [
-                              Text("\$${p.precio.toStringAsFixed(2)}", style: TextStyle(color: Colores.azulCielo, fontWeight: FontWeight.bold, fontSize: 20)),
-                              const Text("P. Público", style: TextStyle(fontSize: 10, color: Colors.grey)),
-                            ],
-                          )
-                        ],
-                      ),
-                      const Divider(),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          IconButton(
-                            icon: const Icon(Icons.edit, color: Colors.orange),
-                            tooltip: "Editar",
-                            onPressed: () => _abrirEdicion(p),
-                          ),
-                          Container(
-                            decoration: BoxDecoration(
-                                color: Colors.red[50], // Fondo rojo suave para resaltar alerta
-                                borderRadius: BorderRadius.circular(20),
-                                border: Border.all(color: Colors.red.shade200)
-                            ),
-                            child: Row(
-                              children: [
-                                IconButton(
-                                  icon: const Icon(Icons.remove, color: Colors.red, size: 20),
-                                  onPressed: () => _modificarStock(p, -1),
-                                ),
-                                Padding(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                                  child: Text(
-                                      "${p.stock}",
-                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.red) // Texto rojo
-                                  ),
-                                ),
-                                IconButton(
-                                  icon: const Icon(Icons.add, color: Colors.green, size: 20),
-                                  onPressed: () => _modificarStock(p, 1),
-                                ),
-                              ],
-                            ),
-                          )
-                        ],
-                      )
-                    ],
-                  ),
-                ),
+              return ProductCard(
+                producto: p,
+                onEdit: () => _abrirEdicion(p),
+                // OMITIMOS onDelete, así el botón de basurero no se dibuja
+                onStockChange: (cantidad) => _modificarStock(p, cantidad),
+                alertStock: true, // Pinta el contenedor de stock en rojo
               );
             },
           ),

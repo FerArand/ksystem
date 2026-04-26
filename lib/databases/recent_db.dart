@@ -1,4 +1,8 @@
+import 'package:sqflite/sqflite.dart';
 import 'app_database.dart';
+import '../models/producto.dart';
+import '../db_helper.dart'; // Necesario para buscar los datos completos
+import 'package:flutter/foundation.dart';
 
 class RecentDB {
   static final RecentDB instance = RecentDB._init();
@@ -18,6 +22,23 @@ class RecentDB {
     // Fire-and-forget intencional: si falla al limpiar después
     // de insertar, no es crítico. El siguiente ciclo lo limpiará.
     _limpiarAntiguos().catchError((e) => debugPrint('[RecentDB] Limpieza: $e'));
+  }
+
+  // NUEVO: Método centralizado que devuelve los productos ya armados
+  Future<List<Producto>> obtenerProductosRecientesCompletos() async {
+    final codigos = await obtenerCodigosRecientes();
+    if (codigos.isEmpty) return [];
+
+    // Ejecutamos en paralelo (rápido y eficiente)
+    final resultados = await Future.wait(
+      codigos.map((codigo) => DBHelper.instance.getProductoPorCodigo(codigo)),
+    );
+
+    // Filtramos los nulos (productos borrados) y convertimos a objetos Producto
+    return resultados
+        .whereType<Map<String, dynamic>>()
+        .map(Producto.desdeMapa)
+        .toList();
   }
 
   Future<List<String>> obtenerCodigosRecientes() async {

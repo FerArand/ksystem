@@ -6,6 +6,9 @@ import 'constants/colores.dart';
 import 'Utils/impresion_ticket.dart';
 import 'models/producto.dart';
 import 'venta.dart';
+import 'models/item_venta.dart' as modelo;
+import 'widgets/product_card.dart';
+import 'databases/app_database.dart';
 
 class CalendarioVentas extends StatefulWidget {
   const CalendarioVentas({Key? key}) : super(key: key);
@@ -61,10 +64,11 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
     }
 
     // 2. OBTENER PRODUCTO TOP DEL MES
-    final db = await HistoryDB.instance.database;
+    final db = await AppDatabase.instance.database;
     final mesStr = fecha.month.toString().padLeft(2, '0');
     final anioStr = fecha.year.toString();
 
+    // AQUÍ ESTÁ rawTickets (¡Esta era la línea que faltaba!)
     final rawTickets = await db.query('ventas_historial',
         columns: ['items'],
         where: "fecha LIKE ? AND es_activo = 1",
@@ -73,16 +77,14 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
     Map<String, int> conteoProductos = {};
     for (var t in rawTickets) {
       String itemsStr = t['items'] as String? ?? "";
-      List<String> lineas = itemsStr.split('|');
-      for (var linea in lineas) {
-        if (linea.trim().isEmpty) continue;
-        int cantidad = int.tryParse(RegExp(r'^(\d+)x').firstMatch(linea.trim())?.group(1) ?? "1") ?? 1;
-        String nombre = linea.replaceAll(RegExp(r'^\d+x'), '').replaceAll(RegExp(r'\[.*?\]'), '').trim();
+      // Usamos el parser mágico que lee JSON y formato viejo
+      final listaItems = modelo.ItemVenta.listaDesdeString(itemsStr);
 
-        if (conteoProductos.containsKey(nombre)) {
-          conteoProductos[nombre] = conteoProductos[nombre]! + cantidad;
+      for (var item in listaItems) {
+        if (conteoProductos.containsKey(item.descripcion)) {
+          conteoProductos[item.descripcion] = conteoProductos[item.descripcion]! + item.cantidad;
         } else {
-          conteoProductos[nombre] = cantidad;
+          conteoProductos[item.descripcion] = item.cantidad;
         }
       }
     }
@@ -126,32 +128,16 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
 
       int folio = ticketData['folio'] ?? ticketData['id'] ?? 0;
       String itemsString = ticketData['items'] ?? "";
-
+      final itemsParseados = modelo.ItemVenta.listaDesdeString(itemsString);
       List<ItemVenta> itemsReconstruidos = [];
-      List<String> lineas = itemsString.split('|');
 
-      for (String linea in lineas) {
-        if (linea.trim().isEmpty) continue;
-        int cantidad = 1;
-        final cantMatch = RegExp(r'^(\d+)x').firstMatch(linea.trim());
-        if (cantMatch != null) cantidad = int.tryParse(cantMatch.group(1)!) ?? 1;
-
-        double precio = 0.0;
-        final precioMatch = RegExp(r'\[P:(.*?)\]').firstMatch(linea);
-        if (precioMatch != null) {
-          precio = double.tryParse(precioMatch.group(1)!.replaceAll(RegExp(r'[^0-9.]'), '')) ?? 0.0;
-        }
-        String sku = "";
-        final skuMatch = RegExp(r'\[SKU:(.*?)\]').firstMatch(linea);
-        if (skuMatch != null) sku = skuMatch.group(1) ?? "";
-
-        String descripcion = linea.replaceAll(RegExp(r'^\d+x'), '').replaceAll(RegExp(r'\[.*?\]'), '').trim();
-
+      for (var item in itemsParseados) {
         Producto pDummy = Producto(
-            id: 0, codigo: "HIST", sku: sku, factura: "", descripcion: descripcion, marca: "",
-            stock: 0, costo: 0, precio: precio, precioRappi: 0, borrado: false
+            id: 0, codigo: "HIST", sku: item.sku, factura: "", descripcion: item.descripcion, marca: "",
+            stock: 0, costo: item.costo, precio: item.precio, precioRappi: 0, borrado: false
         );
-        itemsReconstruidos.add(ItemVenta(producto: pDummy, cantidad: cantidad));
+        // Usamos el ItemVenta local de venta.dart para el ticket
+        itemsReconstruidos.add(ItemVenta(producto: pDummy, cantidad: item.cantidad));
       }
 
       await ImpresionTicket.imprimirTicket(items: itemsReconstruidos, total: total, recibido: recibido, cambio: cambio, folioVenta: folio);
@@ -172,7 +158,7 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
             children: [
               IconButton(icon: const Icon(Icons.arrow_back_ios, color: Colors.blue), onPressed: () => _cambiarMes(-1)),
               Text(DateFormat('MMMM yyyy', 'es_MX').format(_fechaActual).toUpperCase(),
-                  style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colores.azulPrincipal)),
+                  style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colores.azulPrincipal)),
               IconButton(icon: const Icon(Icons.arrow_forward_ios, color: Colors.blue), onPressed: () => _cambiarMes(1)),
               const SizedBox(width: 20),
 
@@ -445,16 +431,16 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
       itemBuilder: (ctx, i) {
         final t = tickets[i];
         final hora = t['fecha'].toString().split(' ')[1].substring(0, 5);
-        List<String> itemsList = t['items'].toString().split('|');
 
-        List<Widget> itemWidgets = itemsList.where((x) => x.isNotEmpty).map((item) {
-          String nombreRaw = item.replaceAll(RegExp(r'^\d+x'), '').replaceAll(RegExp(r'\[.*?\]'), '').trim();
-          String skuRaw = RegExp(r'\[SKU:(.*?)\]').firstMatch(item)?.group(1) ?? "";
+        // 1. NUEVO PARSEO AUTOMÁTICO (Adiós al split('|'))
+        final itemsParseados = modelo.ItemVenta.listaDesdeString(t['items'] ?? "");
 
+        // 2. Mapeamos directamente usando las propiedades del objeto
+        List<Widget> itemWidgets = itemsParseados.map((item) {
           return FutureBuilder<Map<String, dynamic>?>(
-            future: _buscarProductoLive(nombreRaw, skuRaw),
+            future: _buscarProductoLive(item.descripcion, item.sku),
             builder: (context, snapshot) {
-              String skuDisplay = skuRaw;
+              String skuDisplay = item.sku;
               if (snapshot.hasData && snapshot.data != null) {
                 if (skuDisplay.isEmpty || skuDisplay == "N/A") {
                   skuDisplay = snapshot.data!['sku'] ?? snapshot.data!['codigo'] ?? "N/A";
@@ -464,8 +450,8 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
               return Padding(
                 padding: const EdgeInsets.only(bottom: 2),
                 child: RichText(text: TextSpan(style: const TextStyle(color: Colors.black87, fontSize: 13), children: [
-                  const TextSpan(text: "• "),
-                  TextSpan(text: nombreRaw, style: const TextStyle(fontWeight: FontWeight.w500)),
+                  TextSpan(text: "${item.cantidad}x "), // Directo del objeto
+                  TextSpan(text: item.descripcion, style: const TextStyle(fontWeight: FontWeight.w500)), // Directo del objeto
                   TextSpan(text: " [SKU: $skuDisplay]", style: TextStyle(color: Colors.blue[700], fontSize: 11, fontWeight: FontWeight.bold)),
                 ])),
               );
@@ -496,29 +482,24 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
     Map<String, dynamic> consolidado = {};
 
     for (var t in tickets) {
-      for (String linea in (t['items'] ?? "").toString().split('|')) {
-        if (linea.trim().isEmpty) continue;
+      // 1. Convertimos todo a lista de objetos mágicamente
+      final itemsParseados = modelo.ItemVenta.listaDesdeString(t['items'] ?? "");
 
-        int cant = int.tryParse(RegExp(r'^(\d+)x').firstMatch(linea.trim())?.group(1) ?? "1") ?? 1;
-        double pUnit = double.tryParse(RegExp(r'\[P:(.*?)\]').firstMatch(linea)?.group(1)?.replaceAll(RegExp(r'[^0-9.]'), '') ?? "0") ?? 0;
-        double cUnit = double.tryParse(RegExp(r'\[C:(.*?)\]').firstMatch(linea)?.group(1)?.replaceAll(RegExp(r'[^0-9.]'), '') ?? "0") ?? 0;
-
-        String sku = RegExp(r'\[SKU:(.*?)\]').firstMatch(linea)?.group(1) ?? "";
-        String nombre = linea.replaceAll(RegExp(r'^\d+x'), '').replaceAll(RegExp(r'\[.*?\]'), '').trim();
-
-        String key = nombre;
+      for (var item in itemsParseados) {
+        // 2. Ya no calculamos nada, tomamos las variables directas
+        String key = item.descripcion;
 
         if (consolidado.containsKey(key)) {
-          consolidado[key]['cant'] += cant;
-          consolidado[key]['bruto'] += (pUnit * cant);
-          consolidado[key]['costo_acumulado'] = (consolidado[key]['costo_acumulado'] ?? 0.0) + (cUnit * cant);
+          consolidado[key]['cant'] += item.cantidad;
+          consolidado[key]['bruto'] += (item.precio * item.cantidad);
+          consolidado[key]['costo_acumulado'] = (consolidado[key]['costo_acumulado'] ?? 0.0) + (item.costo * item.cantidad);
         } else {
           consolidado[key] = {
-            'nombre': nombre,
-            'sku_historico': sku,
-            'cant': cant,
-            'bruto': (pUnit * cant),
-            'costo_acumulado': (cUnit * cant)
+            'nombre': item.descripcion,
+            'sku_historico': item.sku,
+            'cant': item.cantidad,
+            'bruto': (item.precio * item.cantidad),
+            'costo_acumulado': (item.costo * item.cantidad)
           };
         }
       }

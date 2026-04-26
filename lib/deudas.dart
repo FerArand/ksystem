@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'databases/debt_db.dart';
 import 'constants/colores.dart';
+import 'models/item_venta.dart';
 
 class Deudas extends StatefulWidget {
   const Deudas({Key? key}) : super(key: key);
@@ -32,8 +33,9 @@ class _DeudasState extends State<Deudas> {
   // Dialogo para ver detalle y abonar
   void _verDetalle(Map<String, dynamic> deudor) {
     String itemsRaw = deudor['items'] ?? "";
-    List<String> listaItems = itemsRaw.split('|').where((e) => e.isNotEmpty).toList();
-    TextEditingController abonoCtrl = TextEditingController();
+    // Parseamos directo a la lista de objetos
+    final listaItems = ItemVenta.listaDesdeString(itemsRaw);
+    final TextEditingController abonoCtrl = TextEditingController();
 
     showDialog(
         context: context,
@@ -47,7 +49,7 @@ class _DeudasState extends State<Deudas> {
             ],
           ),
           content: SizedBox(
-            width: 600, // Un poco más ancho para que quepa todo
+            width: 600,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -67,24 +69,7 @@ class _DeudasState extends State<Deudas> {
                     separatorBuilder: (c, i) => const Divider(height: 1),
                     itemCount: listaItems.length,
                     itemBuilder: (c, i) {
-                      String raw = listaItems[i];
-
-                      // EXTRACCIÓN DE METADATOS (SKU, Precio, Costo) usando Regex simple
-                      String sku = "";
-                      String precio = "";
-                      String costo = "";
-
-                      final skuMatch = RegExp(r'\[SKU:(.*?)\]').firstMatch(raw);
-                      if (skuMatch != null) sku = skuMatch.group(1) ?? "";
-
-                      final precioMatch = RegExp(r'\[P:(.*?)\]').firstMatch(raw);
-                      if (precioMatch != null) precio = precioMatch.group(1) ?? "";
-
-                      final costoMatch = RegExp(r'\[C:(.*?)\]').firstMatch(raw);
-                      if (costoMatch != null) costo = costoMatch.group(1) ?? "";
-
-                      // Limpiar descripción (quitar los tags [..])
-                      String descripcion = raw.replaceAll(RegExp(r'\[.*?\]'), '').trim();
+                      final item = listaItems[i]; // Ya es un objeto real
 
                       return Padding(
                         padding: const EdgeInsets.symmetric(vertical: 6.0),
@@ -100,14 +85,13 @@ class _DeudasState extends State<Deudas> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(descripcion, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
-                                  // Fila de metadatos (SKU, Precio, Costo)
+                                  Text("${item.cantidad}x ${item.descripcion}", style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
                                   Wrap(
                                     spacing: 8,
                                     children: [
-                                      if (sku.isNotEmpty) _tag("SKU: $sku", Colors.blue),
-                                      if (precio.isNotEmpty) _tag("Vendido: \$$precio", Colors.green),
-                                      if (costo.isNotEmpty) _tag("Costo: \$$costo", Colors.grey),
+                                      if (item.sku.isNotEmpty) _tag("SKU: ${item.sku}", Colors.blue),
+                                      if (item.precio > 0) _tag("Vendido: \$${item.precio}", Colors.green),
+                                      if (item.costo > 0) _tag("Costo: \$${item.costo}", Colors.grey),
                                     ],
                                   )
                                 ],
@@ -151,8 +135,6 @@ class _DeudasState extends State<Deudas> {
                 if (abono > 0) {
                   await DebtDB.instance.abonar(deudor['id'], abono);
 
-                  // Verificamos que el widget siga vivo antes de tocar
-                  // cualquier cosa relacionada con el árbol de widgets.
                   if (!mounted) return;
 
                   _cargarDeudores();
@@ -166,7 +148,7 @@ class _DeudasState extends State<Deudas> {
             )
           ],
         )
-    );
+    ).then((_) => abonoCtrl.dispose()); // Aquí evitamos la fuga de memoria
   }
 
   Widget _tag(String texto, MaterialColor colorBase) {

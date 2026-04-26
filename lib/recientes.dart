@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'databases/recent_db.dart';
-import 'db_helper.dart'; // Tu DB principal
+// Tu DB principal
 import 'models/producto.dart';
-import 'constants/colores.dart';
 
 class ProductosRecientes extends StatefulWidget {
   const ProductosRecientes({Key? key}) : super(key: key);
@@ -22,26 +21,15 @@ class _ProductosRecientesState extends State<ProductosRecientes> {
   }
 
   Future<void> _cargar() async {
-    final codigos = await RecentDB.instance.obtenerCodigosRecientes();
+    // Usamos el nuevo servicio unificado
+    final temp = await RecentDB.instance.obtenerProductosRecientesCompletos();
 
-    if (codigos.isEmpty) {
-      setState(() { _listaRecientes = []; _cargando = false; });
-      return;
+    if (mounted) {
+      setState(() {
+        _listaRecientes = temp;
+        _cargando = false;
+      });
     }
-
-    final resultados = await Future.wait(
-      codigos.map((codigo) => DBHelper.instance.getProductoPorCodigo(codigo)),
-    );
-
-    final temp = resultados
-        .whereType<Map<String, dynamic>>()
-        .map(Producto.desdeMapa)
-        .toList();
-
-    setState(() {
-      _listaRecientes = temp;
-      _cargando = false;
-    });
   }
 
   @override

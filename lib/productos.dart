@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'db_helper.dart';
 import 'models/producto.dart';
-import 'constants/colores.dart';
 import 'widgets/product_form_dialog.dart'; // <--- Importamos el formulario unificado
+import 'widgets/product_card.dart';
 
 class Productos extends StatefulWidget {
   const Productos({Key? key}) : super(key: key);
@@ -125,92 +125,11 @@ class _ProductosState extends State<Productos> {
             itemCount: _listaProductos.length,
             itemBuilder: (ctx, i) {
               final p = _listaProductos[i];
-              return Card(
-                elevation: 3,
-                margin: const EdgeInsets.symmetric(vertical: 6),
-                child: Padding(
-                  padding: const EdgeInsets.all(12.0),
-                  child: Column(
-                    children: [
-                      // FILA 1: DATOS PRINCIPALES
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(p.descripcion, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                                const SizedBox(height: 4),
-                                Text("Código: ${p.codigo} | SKU: ${p.sku}", style: TextStyle(color: Colors.grey[700], fontSize: 12)),
-                                Text("Marca: ${p.marca} | Factura: ${p.factura}", style: TextStyle(color: Colors.grey[700], fontSize: 12)),
-                              ],
-                            ),
-                          ),
-                          Column(
-                            children: [
-                              Text("\$${p.precio.toStringAsFixed(2)}", style: TextStyle(color: Colores.azulCielo, fontWeight: FontWeight.bold, fontSize: 20)),
-                              const Text("P. Público", style: TextStyle(fontSize: 10, color: Colors.grey)),
-                            ],
-                          )
-                        ],
-                      ),
-                      const Divider(),
-
-                      // FILA 2: CONTROLES Y ACCIONES
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          // BOTONES DE ACCIÓN (Editar / Eliminar)
-                          Row(
-                            children: [
-                              IconButton(
-                                icon: const Icon(Icons.edit, color: Colors.orange),
-                                tooltip: "Editar",
-                                onPressed: () => _abrirEdicion(p), // <-- USAMOS LA NUEVA FUNCIÓN
-                              ),
-                              IconButton(
-                                icon: const Icon(Icons.delete, color: Colors.red),
-                                tooltip: "Eliminar",
-                                onPressed: () => _borrar(p),
-                              ),
-                            ],
-                          ),
-
-                          // CONTROL DE STOCK RÁPIDO
-                          Container(
-                            decoration: BoxDecoration(
-                                color: Colors.grey[100],
-                                borderRadius: BorderRadius.circular(20),
-                                border: Border.all(color: Colors.grey.shade300)
-                            ),
-                            child: Row(
-                              children: [
-                                IconButton(
-                                  icon: const Icon(Icons.remove, color: Colors.red, size: 20),
-                                  constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
-                                  onPressed: () => _modificarStock(p, -1),
-                                ),
-                                Padding(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                                  child: Text(
-                                      "${p.stock}",
-                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)
-                                  ),
-                                ),
-                                IconButton(
-                                  icon: const Icon(Icons.add, color: Colors.green, size: 20),
-                                  constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
-                                  onPressed: () => _modificarStock(p, 1),
-                                ),
-                              ],
-                            ),
-                          )
-                        ],
-                      )
-                    ],
-                  ),
-                ),
+              return ProductCard(
+                producto: p,
+                onEdit: () => _abrirEdicion(p),
+                onDelete: () => _borrar(p),
+                onStockChange: (cantidad) => _modificarStock(p, cantidad),
               );
             },
           ),

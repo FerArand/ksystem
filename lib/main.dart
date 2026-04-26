@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:intl/date_symbol_data_local.dart'; // <--- 1. Importar esto
+import 'services/migration_service.dart';
 import 'inicio.dart';
 import 'dart:io';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'databases/app_database.dart';
+import 'databases/history_db.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();

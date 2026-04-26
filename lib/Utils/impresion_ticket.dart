@@ -17,7 +17,7 @@ class ImpresionTicket {
     final doc = pw.Document();
     final fecha = DateFormat('dd/MM/yyyy HH:mm').format(DateTime.now());
 
-    final PdfPageFormat formatoTicket = PdfPageFormat(
+    const PdfPageFormat formatoTicket = PdfPageFormat(
       58 * PdfPageFormat.mm, 
       double.infinity, 
       marginAll: 0

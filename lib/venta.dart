@@ -1,5 +1,6 @@
-import 'package:flutter/material.dart';
+
 import 'package:intl/intl.dart';
+
 import 'db_helper.dart';
 import 'models/producto.dart';
 import 'constants/colores.dart';
@@ -7,6 +8,8 @@ import 'Utils/impresion_ticket.dart';
 import 'databases/history_db.dart';
 import 'databases/debt_db.dart';
 import 'widgets/product_form_dialog.dart';
+import 'models/item_venta.dart' as modelo;
+import 'package:flutter/material.dart';
 
 class ItemVenta {
   Producto producto;
@@ -41,6 +44,16 @@ class _VentaState extends State<Venta> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       FocusScope.of(context).requestFocus(_focusNode);
     });
+  }
+  @override
+  void dispose() {
+    _codigoController.dispose();
+    _focusNode.dispose();
+    _recibidoController.dispose();
+    _calcBaseLen.dispose();
+    _calcBasePrecio.dispose();
+    _calcCorteLen.dispose();
+    super.dispose();
   }
 
   void _calcularTotal() {
@@ -95,20 +108,23 @@ class _VentaState extends State<Venta> {
     _focusNode.requestFocus();
   }
 
-  // --- LÓGICA DE FIADO ---
+// --- LÓGICA DE FIADO MEJORADA ---
   Future<void> _crearFiado() async {
     if (_carrito.isEmpty) return;
 
-    String itemsResumen = _carrito.map((e) {
-      String extra = "";
-      if (e.producto.sku.isNotEmpty) extra += " [SKU:${e.producto.sku}]";
-      extra += " [P:${e.producto.precio}]";
-      extra += " [C:${e.producto.costo}]";
+    // 1. Convertimos el carrito al formato JSON usando tu nueva clase
+    List<modelo.ItemVenta> itemsParaGuardar = _carrito.map((e) => modelo.ItemVenta(
+      sku: e.producto.sku,
+      descripcion: e.producto.descripcion,
+      cantidad: e.cantidad,
+      precio: e.producto.precio,
+      costo: e.producto.costo,
+    )).toList();
 
-      return "${e.cantidad}x ${e.producto.descripcion}$extra";
-    }).join("|");
+    String itemsResumenJson = modelo.ItemVenta.listaAJson(itemsParaGuardar);
 
-    TextEditingController nombreDeudorCtrl = TextEditingController();
+    // 2. Declaramos el controlador FUERA del diálogo para poder desecharlo
+    final TextEditingController nombreDeudorCtrl = TextEditingController();
 
     await showDialog(
         context: context,
@@ -136,12 +152,14 @@ class _VentaState extends State<Venta> {
                   String nombre = nombreDeudorCtrl.text.trim();
                   if (nombre.isEmpty) return;
 
-                  await DebtDB.instance.actualizarDeuda(nombre, itemsResumen, _total);
+                  // Usamos el JSON en lugar del string con pipes
+                  await DebtDB.instance.actualizarDeuda(nombre, itemsResumenJson, _total);
 
                   for (var item in _carrito) {
                     await DBHelper.instance.updateStock(item.producto.codigo, -item.cantidad);
                   }
 
+                  if (!mounted) return; // Protección del contexto
                   Navigator.pop(ctx);
                   _limpiarTodo();
                   ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Fiado registrado a $nombre")));
@@ -151,6 +169,9 @@ class _VentaState extends State<Venta> {
           ],
         )
     );
+
+    // 3. Prevenimos el Memory Leak
+    nombreDeudorCtrl.dispose();
   }
 
   void _agregarItemLogica(Producto p) {
@@ -207,6 +228,7 @@ class _VentaState extends State<Venta> {
     );
   }
 
+  // --- FINALIZAR VENTA MEJORADA ---
   Future<void> _finalizarVenta() async {
     if (_carrito.isEmpty) return;
     if (_recibido < _total) {
@@ -214,21 +236,52 @@ class _VentaState extends State<Venta> {
       return;
     }
 
-    String itemsResumen = _carrito.map((e) => "${e.cantidad}x ${e.producto.descripcion}").join("|");
+    // 1. Preparar datos
+    List<modelo.ItemVenta> itemsParaGuardar = _carrito.map((e) => modelo.ItemVenta(
+      sku: e.producto.sku,
+      descripcion: e.producto.descripcion,
+      cantidad: e.cantidad,
+      precio: e.producto.precio,
+      costo: e.producto.costo,
+    )).toList();
+
+    String itemsResumenJson = modelo.ItemVenta.listaAJson(itemsParaGuardar);
     final fecha = DateFormat('yyyy-MM-dd HH:mm:ss').format(DateTime.now());
+
     double costoTotalVenta = 0.0;
-    for (var item in _carrito) { costoTotalVenta += (item.producto.costo * item.cantidad); }
+    for (var item in _carrito) {
+      costoTotalVenta += (item.producto.costo * item.cantidad);
+    }
 
-    int ventaId = await DBHelper.instance.insertVenta({
-      'fecha': fecha, 'total': _total, 'recibido': _recibido, 'cambio': (_recibido - _total), 'cliente': 'Mostrador', 'items': itemsResumen
-    });
-    for (var item in _carrito) { await DBHelper.instance.updateStock(item.producto.codigo, -item.cantidad); }
-    await HistoryDB.instance.registrarVenta(folio: ventaId, fecha: fecha, total: _total, costoTotal: costoTotalVenta, items: itemsResumen);
+    // 2. UN SOLO REGISTRO (Aquí es donde estaba el error)
+    // Ya no llamamos a DBHelper.insertVenta, vamos directo a HistoryDB
+    int ventaId = await HistoryDB.instance.registrarVenta(
+        fecha: fecha,
+        total: _total,
+        costoTotal: costoTotalVenta,
+        items: itemsResumenJson,
+        cliente: 'Mostrador'
+    );
 
+    // 3. Actualizar Stock
+    for (var item in _carrito) {
+      await DBHelper.instance.updateStock(item.producto.codigo, -item.cantidad);
+    }
+
+    // 4. Imprimir y Limpiar
     try {
-      await ImpresionTicket.imprimirTicket(items: _carrito, total: _total, recibido: _recibido, cambio: (_recibido - _total), folioVenta: ventaId);
-    } catch (e) { print(e); }
+      await ImpresionTicket.imprimirTicket(
+          items: _carrito,
+          total: _total,
+          recibido: _recibido,
+          cambio: (_recibido - _total),
+          folioVenta: ventaId
+      );
+    } catch (e) {
+      debugPrint("Error al imprimir: $e");
+    }
 
+    if (!mounted) return;
     _limpiarTodo();
   }
 
@@ -540,11 +593,16 @@ class DialogoBusquedaVenta extends StatefulWidget {
 }
 class _DialogoBusquedaVentaState extends State<DialogoBusquedaVenta> {
   List<Producto> _resultados = [];
+
   Future<void> _buscar(String query) async {
-    if (query.length < 2) return;
-    final db = await DBHelper.instance.database;
-    final res = await db.query('productos', where: 'descripcion LIKE ? OR factura LIKE ?', whereArgs: ['%$query%', '%$query%']);
-    setState(() => _resultados = res.map((e) => Producto.desdeMapa(e)).toList());
+    if (query.length < 2) return; // Evitamos búsquedas con 1 sola letra
+
+    // Reutilizamos la misma regla de negocio
+    final lista = await DBHelper.instance.buscarParaSeleccionManual(query);
+
+    if (mounted) {
+      setState(() => _resultados = lista);
+    }
   }
   @override
   Widget build(BuildContext context) {

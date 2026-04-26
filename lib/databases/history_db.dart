@@ -1,4 +1,6 @@
 import 'app_database.dart';
+import 'package:sqflite/sqflite.dart';
+import 'package:flutter/foundation.dart';
 
 class HistoryDB {
   static final HistoryDB instance = HistoryDB._init();
@@ -17,8 +19,8 @@ class HistoryDB {
   }
 
   // --- REGISTRAR ---
+  // --- REGISTRAR VENTA (Versión Unificada) ---
   Future<int> registrarVenta({
-    required int folio,
     required String fecha,
     required double total,
     required double costoTotal,
@@ -26,10 +28,9 @@ class HistoryDB {
     String cliente = "Cliente General"
   }) async {
     final db = await _db;
-    // depurarBaseDatos() ya NO va aquí.
-    // La limpieza es mantenimiento, no parte de registrar una venta.
-    return await db.insert('ventas_historial', {
-      'folio_venta': folio,
+
+    // 1. Insertamos la venta. El 'id' se genera solo.
+    int idGenerado = await db.insert('ventas_historial', {
       'fecha': fecha,
       'total': total,
       'costo_total': costoTotal,
@@ -37,6 +38,17 @@ class HistoryDB {
       'cliente': cliente,
       'es_activo': 1
     });
+
+    // 2. Opcional: Sincronizamos el folio_venta con el ID generado
+    // para que coincidan en tus tickets y reportes.
+    await db.update(
+        'ventas_historial',
+        {'folio_venta': idGenerado},
+        where: 'id = ?',
+        whereArgs: [idGenerado]
+    );
+
+    return idGenerado;
   }
 
 // NUEVO: Método seguro para llamar la limpieza desde fuera,

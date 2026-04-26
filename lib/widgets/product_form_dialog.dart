@@ -53,7 +53,7 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
 
     double precioIni = p?.precio ?? 0.0;
     double gananciaIni = 46.0;
-    if (esEdicion && p!.costo > 0) {
+    if (esEdicion && p.costo > 0) {
       gananciaIni = ((p.precio / p.costo) - 1) * 100;
     }
 
@@ -126,7 +126,7 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
                     decoration: InputDecoration(
                         labelText: "Precio Público", filled: true, fillColor: Colors.blue[50],
                         border: const OutlineInputBorder(), suffixText: "\$",
-                        labelStyle: TextStyle(color: Colores.azulPrincipal, fontWeight: FontWeight.bold)
+                        labelStyle: const TextStyle(color: Colores.azulPrincipal, fontWeight: FontWeight.bold)
                     ),
                     keyboardType: TextInputType.number, validator: validar,
                   )),

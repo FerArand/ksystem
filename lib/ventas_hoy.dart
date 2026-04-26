@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'databases/history_db.dart';
-import 'constants/colores.dart';
+import 'widgets/dialogo_recibo.dart';
 
 class VentasHoy extends StatefulWidget {
   const VentasHoy({Key? key}) : super(key: key);
@@ -51,24 +51,36 @@ class _VentasHoyState extends State<VentasHoy> {
   }
 
   Future<void> _asignarNombre(int id, String nombreActual) async {
-    TextEditingController _ctrl = TextEditingController(text: nombreActual == "Cliente General" ? "" : nombreActual);
+    // 1. Declaramos el controlador FUERA del diálogo
+    final TextEditingController ctrl = TextEditingController(
+        text: nombreActual == "Cliente General" ? "" : nombreActual
+    );
+
     await showDialog(
         context: context,
         builder: (ctx) => AlertDialog(
           title: const Text("Asignar Cliente al Ticket"),
           content: TextField(
-            controller: _ctrl,
+            controller: ctrl,
             autofocus: true,
-            decoration: const InputDecoration(labelText: "Nombre del Cliente", border: OutlineInputBorder()),
+            decoration: const InputDecoration(
+                labelText: "Nombre del Cliente",
+                border: OutlineInputBorder()
+            ),
           ),
           actions: [
-            TextButton(onPressed: ()=>Navigator.pop(ctx), child: const Text("Cancelar")),
+            TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text("Cancelar")
+            ),
             ElevatedButton(
                 onPressed: () async {
-                  String nombre = _ctrl.text.trim().isEmpty
-                      ? "Cliente General" : _ctrl.text.trim();
+                  String nombre = ctrl.text.trim().isEmpty
+                      ? "Cliente General" : ctrl.text.trim();
+
                   await HistoryDB.instance.asignarNombreCliente(id, nombre);
-                  if (!mounted) return;
+
+                  if (!mounted) return; // Protegemos el contexto antes de actualizar la UI
                   _cargarVentasDelDia();
                   Navigator.pop(ctx);
                 },
@@ -77,61 +89,16 @@ class _VentasHoyState extends State<VentasHoy> {
           ],
         )
     );
+
+    // 2. Liberamos la memoria explícitamente cuando el diálogo se cierra
+    ctrl.dispose();
   }
 
-  // --- NUEVO: FUNCIÓN PARA VER RECIBO DETALLADO ---
+// --- NUEVO: FUNCIÓN PARA VER RECIBO DETALLADO (Limpia) ---
   void _verReciboDetalle(Map<String, dynamic> venta) {
-    // Convertimos la cadena "3x Cemento | 1x Llana" en una lista
-    String itemsRaw = venta['items'] ?? "";
-    List<String> listaItems = itemsRaw.split('|');
-
     showDialog(
-        context: context,
-        builder: (ctx) => Dialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-          child: Container(
-            width: 400,
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.receipt_long, size: 50, color: Colors.blueGrey),
-                const SizedBox(height: 10),
-                Text("Ticket #${venta['folio_venta']}", style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-                Text(venta['fecha'], style: TextStyle(color: Colors.grey[600], fontSize: 12)),
-                const Divider(thickness: 2),
-
-                // LISTA DESGLOSADA
-                ConstrainedBox(
-                  constraints: const BoxConstraints(maxHeight: 300),
-                  child: ListView.builder(
-                    shrinkWrap: true,
-                    itemCount: listaItems.length,
-                    itemBuilder: (context, i) {
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 4.0),
-                        child: Text("• ${listaItems[i].trim()}", style: const TextStyle(fontSize: 16)),
-                      );
-                    },
-                  ),
-                ),
-
-                const Divider(thickness: 2),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text("TOTAL:", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-                    Text("\$${venta['total'].toStringAsFixed(2)}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.green)),
-                  ],
-                ),
-                const SizedBox(height: 5),
-                Text("Cliente: ${venta['cliente']}", style: const TextStyle(fontSize: 12, fontStyle: FontStyle.italic)),
-                const SizedBox(height: 20),
-                ElevatedButton(onPressed: ()=>Navigator.pop(ctx), child: const Text("CERRAR"))
-              ],
-            ),
-          ),
-        )
+      context: context,
+      builder: (ctx) => DialogoRecibo(venta: venta),
     );
   }
 
@@ -215,9 +182,9 @@ class _VentasHoyState extends State<VentasHoy> {
                                 // BOTÓN VER RECIBO
                                 InkWell(
                                   onTap: () => _verReciboDetalle(v),
-                                  child: Row(
+                                  child: const Row(
                                     mainAxisSize: MainAxisSize.min,
-                                    children: const [
+                                    children: [
                                       Icon(Icons.visibility, size: 16, color: Colors.blue),
                                       SizedBox(width: 4),
                                       Text("Ver Recibo Completo", style: TextStyle(fontSize: 12, color: Colors.blue, fontWeight: FontWeight.bold)),

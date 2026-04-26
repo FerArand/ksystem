@@ -1,9 +1,15 @@
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'databases/app_database.dart';
+import 'models/producto.dart';
 
 class DBHelper {
   static final DBHelper instance = DBHelper._init();
   DBHelper._init();
+
+  // Cambiamos el nombre o añadimos un getter público
+  Future<Database> get database async {
+    return await AppDatabase.instance.database;
+  }
 
   Future<Database> get _db async => AppDatabase.instance.database;
 
@@ -11,6 +17,21 @@ class DBHelper {
     final db = await _db;
     return await db.insert('productos', row,
         conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+  // NUEVO: Lógica de negocio encapsulada para búsquedas manuales
+  Future<List<Producto>> buscarParaSeleccionManual(String query) async {
+    if (query.isEmpty) return [];
+
+    final db = await _db;
+    final res = await db.query(
+        'productos',
+        where: 'descripcion LIKE ? OR factura LIKE ?',
+        whereArgs: ['%$query%', '%$query%'],
+        limit: 20 // Límite para proteger la memoria
+    );
+
+    // Mapeamos aquí, la UI solo recibe la lista de objetos listos para usar
+    return res.map((e) => Producto.desdeMapa(e)).toList();
   }
 
   Future<Map<String, dynamic>?> getProductoPorCodigo(String codigo) async {

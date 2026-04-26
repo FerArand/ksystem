@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'databases/history_db.dart';
 import 'constants/colores.dart';
+import 'widgets/dialogo_recibo.dart';
 
 class HistorialVentas extends StatefulWidget {
   const HistorialVentas({Key? key}) : super(key: key);
@@ -31,17 +32,21 @@ class _HistorialVentasState extends State<HistorialVentas> {
   }
 
   Future<void> _editarCliente(int id, String nombreActual) async {
-    TextEditingController _ctrl = TextEditingController(text: nombreActual);
+    // 1. Declarar fuera del builder
+    final TextEditingController ctrl = TextEditingController(text: nombreActual);
+
     await showDialog(
         context: context,
         builder: (ctx) => AlertDialog(
           title: const Text("Editar Cliente"),
-          content: TextField(controller: _ctrl, decoration: const InputDecoration(labelText: "Nombre", border: OutlineInputBorder())),
+          content: TextField(controller: ctrl, decoration: const InputDecoration(labelText: "Nombre", border: OutlineInputBorder())),
           actions: [
             TextButton(onPressed: ()=>Navigator.pop(ctx), child: const Text("Cancelar")),
             ElevatedButton(
                 onPressed: () async {
-                  await HistoryDB.instance.asignarNombreCliente(id, _ctrl.text);
+                  await HistoryDB.instance.asignarNombreCliente(id, ctrl.text);
+
+                  if (!mounted) return; // Proteger contexto
                   _cargarDatos();
                   Navigator.pop(ctx);
                 },
@@ -50,52 +55,15 @@ class _HistorialVentasState extends State<HistorialVentas> {
           ],
         )
     );
+
+    // 2. Liberar memoria
+    ctrl.dispose();
   }
 
-  // --- MISMA FUNCIÓN DE DETALLE QUE EN VENTAS DEL DÍA ---
   void _verReciboDetalle(Map<String, dynamic> venta) {
-    String itemsRaw = venta['items'] ?? "";
-    List<String> listaItems = itemsRaw.split('|');
-
     showDialog(
-        context: context,
-        builder: (ctx) => Dialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          child: Container(
-            width: 400,
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text("Detalle de Venta (Histórico)", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                const Divider(),
-                Text("Folio: #${venta['folio_venta']}  |  Fecha: ${venta['fecha']}", style: TextStyle(color: Colors.grey[600], fontSize: 12)),
-                const SizedBox(height: 10),
-
-                // LISTA
-                ConstrainedBox(
-                  constraints: const BoxConstraints(maxHeight: 300),
-                  child: ListView.builder(
-                    shrinkWrap: true,
-                    itemCount: listaItems.length,
-                    itemBuilder: (context, i) {
-                      return Container(
-                        padding: const EdgeInsets.symmetric(vertical: 5),
-                        decoration: BoxDecoration(border: Border(bottom: BorderSide(color: Colors.grey.shade200))),
-                        child: Text("• ${listaItems[i].trim()}"),
-                      );
-                    },
-                  ),
-                ),
-
-                const SizedBox(height: 10),
-                Align(alignment: Alignment.centerRight, child: Text("Total: \$${venta['total'].toStringAsFixed(2)}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18))),
-                const SizedBox(height: 15),
-                ElevatedButton(onPressed: ()=>Navigator.pop(ctx), child: const Text("Cerrar"))
-              ],
-            ),
-          ),
-        )
+      context: context,
+      builder: (ctx) => DialogoRecibo(venta: venta),
     );
   }
 
@@ -148,7 +116,7 @@ class _HistorialVentasState extends State<HistorialVentas> {
             child: SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               child: DataTable(
-                headingRowColor: MaterialStateProperty.all(Colors.blueGrey[50]),
+                headingRowColor: WidgetStateProperty.all(Colors.blueGrey[50]),
                 dataRowHeight: 60,
                 columns: const [
                   DataColumn(label: Text("Folio")),
@@ -162,10 +130,10 @@ class _HistorialVentasState extends State<HistorialVentas> {
                 rows: _ventas.map((v) {
                   bool esActivo = v['es_activo'] == 1;
                   String itemsPreview = v['items'] ?? "";
-                  if(itemsPreview.length > 40) itemsPreview = itemsPreview.substring(0, 37) + "...";
+                  if(itemsPreview.length > 40) itemsPreview = "${itemsPreview.substring(0, 37)}...";
 
                   return DataRow(
-                      color: MaterialStateProperty.resolveWith<Color?>((states) => !esActivo ? Colors.orange[50] : null),
+                      color: WidgetStateProperty.resolveWith<Color?>((states) => !esActivo ? Colors.orange[50] : null),
                       cells: [
                         DataCell(Text("#${v['folio_venta']}", style: const TextStyle(fontWeight: FontWeight.bold))),
                         DataCell(Text(v['fecha'].toString().split(' ')[0])), // Solo fecha corta
@@ -174,7 +142,7 @@ class _HistorialVentasState extends State<HistorialVentas> {
                           child: Row(children: [Text(v['cliente']), const Icon(Icons.edit, size: 12, color: Colors.grey)]),
                         )),
                         DataCell(Text(itemsPreview, style: TextStyle(color: Colors.grey[700], fontStyle: FontStyle.italic))),
-                        DataCell(Text("\$${v['total'].toStringAsFixed(2)}", style: TextStyle(color: Colores.azulPrincipal, fontWeight: FontWeight.bold))),
+                        DataCell(Text("\$${v['total'].toStringAsFixed(2)}", style: const TextStyle(color: Colores.azulPrincipal, fontWeight: FontWeight.bold))),
                         DataCell(Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                           decoration: BoxDecoration(color: esActivo ? Colors.green[100] : Colors.orange[100], borderRadius: BorderRadius.circular(10)),

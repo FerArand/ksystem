@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:ksystem/widgets/product_card.dart';
 import 'db_helper.dart';
 import 'databases/recent_db.dart';
 import 'models/producto.dart';
@@ -15,7 +16,7 @@ class NuevoIngreso extends StatefulWidget {
 class _NuevoIngresoState extends State<NuevoIngreso> {
   final TextEditingController _scannerController = TextEditingController();
   final FocusNode _scannerFocus = FocusNode();
-  List<Producto> _agregadosRecientemente = [];
+  final List<Producto> _agregadosRecientemente = [];
   bool _cargando = true;
 
   @override
@@ -29,23 +30,21 @@ class _NuevoIngresoState extends State<NuevoIngreso> {
 
   // --- CARGA DE DATOS (Recientes) ---
   Future<void> _cargarMemoriaReciente() async {
-    final codigos = await RecentDB.instance.obtenerCodigosRecientes();
-
-    // Lanzamos TODAS las queries al mismo tiempo
-    // y esperamos a que terminen en paralelo.
-    final resultados = await Future.wait(
-      codigos.map((codigo) => DBHelper.instance.getProductoPorCodigo(codigo)),
-    );
-
-    // Filtramos los nulls (productos que ya no existen en BD)
-    final recuperados = resultados
-        .whereType<Map<String, dynamic>>()
-        .map(Producto.desdeMapa)
-        .toList();
+    final recuperados = await RecentDB.instance.obtenerProductosRecientesCompletos();
 
     if (mounted) {
       setState(() {
-        _agregadosRecientemente = recuperados;
+        // SOLUCIÓN A LA CONDICIÓN DE CARRERA:
+        // Si el usuario escaneó algo súper rápido mientras esto cargaba,
+        // ya estará en la lista. No debemos aplastarlo con "=",
+        // sino combinar ambas listas sin duplicados.
+        final codigosEscaneados = _agregadosRecientemente.map((e) => e.codigo).toSet();
+
+        for (var p in recuperados) {
+          if (!codigosEscaneados.contains(p.codigo)) {
+            _agregadosRecientemente.add(p); // Añadimos al final los de la BD
+          }
+        }
         _cargando = false;
       });
     }
@@ -191,97 +190,18 @@ class _NuevoIngresoState extends State<NuevoIngreso> {
                 ? const Center(child: Text("Sin actividad reciente.", style: TextStyle(color: Colors.grey, fontSize: 18)))
                 : ListView.builder(
               itemCount: _agregadosRecientemente.length,
-              itemBuilder: (context, index) {
-                final p = _agregadosRecientemente[index];
+              itemBuilder: (context, i) {
+                // 1. Usamos la variable correcta de esta pantalla
+                final p = _agregadosRecientemente[i];
 
-                // --- ESTA ES LA TARJETA ORIGINAL QUE TE GUSTABA ---
-                return Card(
-                  elevation: 3,
-                  margin: const EdgeInsets.symmetric(vertical: 6),
-                  child: Padding(
-                    padding: const EdgeInsets.all(12.0),
-                    child: Column(
-                      children: [
-                        // FILA 1: DATOS PRINCIPALES
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(p.descripcion, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                                  const SizedBox(height: 4),
-                                  Text("Código: ${p.codigo} | SKU: ${p.sku}", style: TextStyle(color: Colors.grey[700], fontSize: 12)),
-                                  Text("Marca: ${p.marca} | Factura: ${p.factura}", style: TextStyle(color: Colors.grey[700], fontSize: 12)),
-                                ],
-                              ),
-                            ),
-                            Column(
-                              children: [
-                                Text("\$${p.precio.toStringAsFixed(2)}", style: TextStyle(color: Colores.azulCielo, fontWeight: FontWeight.bold, fontSize: 20)),
-                                const Text("P. Público", style: TextStyle(fontSize: 10, color: Colors.grey)),
-                              ],
-                            )
-                          ],
-                        ),
-                        const Divider(),
-
-                        // FILA 2: CONTROLES Y ACCIONES
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            // BOTONES DE ACCIÓN (Editar / Eliminar)
-                            Row(
-                              children: [
-                                IconButton(
-                                  icon: const Icon(Icons.edit, color: Colors.orange),
-                                  tooltip: "Editar",
-                                  // Llamamos al nuevo dialogo unificado
-                                  onPressed: () => _abrirFormularioProducto(codigoInicial: p.codigo, productoExistente: p),
-                                ),
-                                IconButton(
-                                  icon: const Icon(Icons.delete, color: Colors.red),
-                                  tooltip: "Eliminar",
-                                  onPressed: () => _eliminarProducto(p),
-                                ),
-                              ],
-                            ),
-
-                            // CONTROL DE STOCK RÁPIDO
-                            Container(
-                              decoration: BoxDecoration(
-                                  color: Colors.grey[100],
-                                  borderRadius: BorderRadius.circular(20),
-                                  border: Border.all(color: Colors.grey.shade300)
-                              ),
-                              child: Row(
-                                children: [
-                                  IconButton(
-                                    icon: const Icon(Icons.remove, color: Colors.red, size: 20),
-                                    constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
-                                    onPressed: () => _modificarStock(p, -1),
-                                  ),
-                                  Padding(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                                    child: Text(
-                                        "${p.stock}",
-                                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)
-                                    ),
-                                  ),
-                                  IconButton(
-                                    icon: const Icon(Icons.add, color: Colors.green, size: 20),
-                                    constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
-                                    onPressed: () => _modificarStock(p, 1),
-                                  ),
-                                ],
-                              ),
-                            )
-                          ],
-                        )
-                      ],
-                    ),
-                  ),
+                return ProductCard(
+                  producto: p,
+                  // 2. Comentamos o eliminamos las funciones que no existen aquí.
+                  // Si en el futuro agregas la función de editar a esta pantalla,
+                  // solo descomentas esto y pones el nombre de tu función:
+                  // onEdit: () => _tuFuncionDeEditar(p),
+                  // onDelete: () => _tuFuncionDeEliminar(p),
+                  // onStockChange: (cantidad) => _tuFuncionDeModificarStock(p, cantidad),
                 );
               },
             ),
@@ -315,17 +235,16 @@ class _DialogoVincularState extends State<DialogoVincular> {
       return;
     }
     setState(() => _buscando = true);
-    final db = await DBHelper.instance.database;
-    final res = await db.query(
-        'productos',
-        where: 'descripcion LIKE ? OR factura LIKE ?',
-        whereArgs: ['%$query%', '%$query%'],
-        limit: 20
-    );
-    setState(() {
-      _resultados = res.map((e) => Producto.desdeMapa(e)).toList();
-      _buscando = false;
-    });
+
+    // Ahora le pedimos los datos al DBHelper de forma limpia
+    final lista = await DBHelper.instance.buscarParaSeleccionManual(query);
+
+    if (mounted) {
+      setState(() {
+        _resultados = lista;
+        _buscando = false;
+      });
+    }
   }
 
   @override
