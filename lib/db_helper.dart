@@ -25,8 +25,8 @@ class DBHelper {
     final db = await _db;
     final res = await db.query(
         'productos',
-        where: 'descripcion LIKE ? OR factura LIKE ?',
-        whereArgs: ['%$query%', '%$query%'],
+        where: 'descripcion LIKE ? OR factura LIKE ? OR sku LIKE ?',
+        whereArgs: ['%$query%', '%$query%', '%$query%'],
         limit: 20 // Límite para proteger la memoria
     );
 

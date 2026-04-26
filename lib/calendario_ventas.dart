@@ -126,7 +126,8 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
           ? ((ticketData['cambio'] is int) ? (ticketData['cambio'] as int).toDouble() : ticketData['cambio'])
           : 0.0;
 
-      int folio = ticketData['folio'] ?? ticketData['id'] ?? 0;
+      int folio = ticketData['folio_venta'] ?? ticketData['id'] ?? 0;
+      String fechaOriginal = ticketData['fecha'] ?? "";
       String itemsString = ticketData['items'] ?? "";
       final itemsParseados = modelo.ItemVenta.listaDesdeString(itemsString);
       List<ItemVenta> itemsReconstruidos = [];
@@ -140,7 +141,14 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
         itemsReconstruidos.add(ItemVenta(producto: pDummy, cantidad: item.cantidad));
       }
 
-      await ImpresionTicket.imprimirTicket(items: itemsReconstruidos, total: total, recibido: recibido, cambio: cambio, folioVenta: folio);
+      await ImpresionTicket.imprimirTicket(
+          items: itemsReconstruidos,
+          total: total,
+          recibido: recibido,
+          cambio: cambio,
+          folioVenta: folio,
+          fechaOriginal: fechaOriginal
+      );
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
     }
@@ -166,6 +174,12 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
                 icon: const Icon(Icons.today),
                 label: const Text("Ir a Hoy"),
                 onPressed: () => _cargarDatosMes(DateTime.now()),
+              ),
+              const SizedBox(width: 10),
+              IconButton(
+                icon: const Icon(Icons.search, color: Colores.azulPrincipal),
+                tooltip: "Buscar Folio de Ticket",
+                onPressed: _mostrarBuscadorFolio,
               ),
 
               // SECCIÓN PRODUCTO DEL MES
@@ -343,7 +357,7 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
     );
   }
 
-  void _abrirDetalleDia(int dia) async {
+  void _abrirDetalleDia(int dia, {int initialTab = 0}) async {
     String fechaYmd = "${_fechaActual.year}-${_fechaActual.month.toString().padLeft(2,'0')}-${dia.toString().padLeft(2,'0')}";
     List<Map<String, dynamic>> tickets = await HistoryDB.instance.obtenerVentasPorDia(fechaYmd);
 
@@ -352,6 +366,8 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
       tVenta += (t['total'] ?? 0.0);
       tCosto += (t['costo_total'] ?? 0.0);
     }
+
+    if (!mounted) return;
 
     showDialog(
         context: context,
@@ -375,6 +391,7 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
                 Expanded(
                   child: DefaultTabController(
                     length: 2,
+                    initialIndex: initialTab,
                     child: Column(
                       children: [
                         const TabBar(
@@ -409,6 +426,66 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
           ),
         )
     );
+  }
+
+  void _mostrarBuscadorFolio() {
+    final TextEditingController folioCtrl = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Buscar Folio de Ticket"),
+        content: TextField(
+          controller: folioCtrl,
+          keyboardType: TextInputType.number,
+          autofocus: true,
+          decoration: const InputDecoration(
+            labelText: "Número de Folio",
+            hintText: "Ej. 514",
+            border: OutlineInputBorder(),
+          ),
+          onSubmitted: (v) => _ejecutarBusquedaFolio(v, ctx),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancelar")),
+          ElevatedButton(
+            onPressed: () => _ejecutarBusquedaFolio(folioCtrl.text, ctx),
+            child: const Text("BUSCAR"),
+          ),
+        ],
+      ),
+    ).then((_) => folioCtrl.dispose());
+  }
+
+  Future<void> _ejecutarBusquedaFolio(String query, BuildContext dialogCtx) async {
+    int? folio = int.tryParse(query);
+    if (folio == null) return;
+
+    final venta = await HistoryDB.instance.buscarVentaPorFolio(folio);
+    
+    if (!mounted) return;
+
+    if (venta == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Folio no encontrado"), backgroundColor: Colors.red),
+      );
+      return;
+    }
+
+    // Si lo encontró, cerramos el buscador
+    Navigator.pop(dialogCtx);
+
+    // Parsear fecha de la venta (YYYY-MM-DD ...)
+    DateTime fechaVenta = DateTime.parse(venta['fecha']);
+    
+    // 1. Navegar al mes si es distinto
+    if (fechaVenta.year != _fechaActual.year || fechaVenta.month != _fechaActual.month) {
+      await _cargarDatosMes(DateTime(fechaVenta.year, fechaVenta.month, 1));
+      // Actualizamos _fechaActual manualmente por si el setState no ha terminado
+      _fechaActual = DateTime(fechaVenta.year, fechaVenta.month, 1);
+    }
+
+    // 2. Abrir detalle del día en la pestaña de tickets (index 1)
+    _abrirDetalleDia(fechaVenta.day, initialTab: 1);
   }
 
   Widget _infoBox(String titulo, double valor, Color color) {

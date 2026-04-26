@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'databases/debt_db.dart';
-import 'constants/colores.dart';
 import 'models/item_venta.dart';
+
+import 'databases/history_db.dart';
+import 'Utils/impresion_ticket.dart';
+import 'package:intl/intl.dart';
 
 class Deudas extends StatefulWidget {
   const Deudas({Key? key}) : super(key: key);
@@ -129,18 +132,55 @@ class _DeudasState extends State<Deudas> {
           ),
           actions: [
             TextButton(onPressed: ()=>Navigator.pop(ctx), child: const Text("Cerrar")),
+            ElevatedButton.icon(
+              icon: const Icon(Icons.print),
+              label: const Text("TICKET DE DEUDA"),
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.blue, foregroundColor: Colors.white),
+              onPressed: () {
+                ImpresionTicket.imprimirTicketAbono(
+                  nombreDeudor: deudor['nombre'],
+                  items: listaItems,
+                  montoAbonado: 0, // Solo impresión de consulta
+                  deudaAnterior: deudor['total_deuda'],
+                  saldoRestante: deudor['total_deuda'],
+                );
+              },
+            ),
             ElevatedButton(
               onPressed: () async {
                 double abono = double.tryParse(abonoCtrl.text) ?? 0;
                 if (abono > 0) {
+                  final deudaPrevia = deudor['total_deuda'] as double;
+                  final saldoRestante = deudaPrevia - abono;
+
+                  // 1. Registrar abono en la base de datos de deudas
                   await DebtDB.instance.abonar(deudor['id'], abono);
+
+                  // 2. Registrar el ingreso en el calendario (HistoryDB)
+                  final fecha = DateFormat('yyyy-MM-dd HH:mm:ss').format(DateTime.now());
+                  await HistoryDB.instance.registrarVenta(
+                    fecha: fecha,
+                    total: abono,
+                    costoTotal: 0, // No es venta de stock nuevo, es cobro de deuda
+                    items: '[]', // Podemos dejarlo vacío o poner un JSON descriptivo
+                    cliente: 'Abono de: ${deudor['nombre']}'
+                  );
+
+                  // 3. Generar Ticket de Abono
+                  await ImpresionTicket.imprimirTicketAbono(
+                    nombreDeudor: deudor['nombre'],
+                    items: listaItems,
+                    montoAbonado: abono,
+                    deudaAnterior: deudaPrevia,
+                    saldoRestante: saldoRestante < 0 ? 0 : saldoRestante,
+                  );
 
                   if (!mounted) return;
 
                   _cargarDeudores();
                   Navigator.pop(ctx);
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text("Abono registrado correctamente")),
+                    const SnackBar(content: Text("Abono registrado e ingreso en calendario guardado")),
                   );
                 }
               },

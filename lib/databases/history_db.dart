@@ -91,6 +91,12 @@ class HistoryDB {
     final db = await _db;
     return await db.update('ventas_historial', {'cliente': nuevoNombre}, where: 'id = ?', whereArgs: [id]);
   }
+
+  Future<Map<String, dynamic>?> buscarVentaPorFolio(int folio) async {
+    final db = await _db;
+    final res = await db.query('ventas_historial', where: 'folio_venta = ?', whereArgs: [folio], limit: 1);
+    return res.isNotEmpty ? res.first : null;
+  }
   // ... código existente ...
 
   // 1. Obtener resumen de ventas de un MES completo (para pintar los cuadritos)

@@ -196,12 +196,12 @@ class _NuevoIngresoState extends State<NuevoIngreso> {
 
                 return ProductCard(
                   producto: p,
-                  // 2. Comentamos o eliminamos las funciones que no existen aquí.
-                  // Si en el futuro agregas la función de editar a esta pantalla,
-                  // solo descomentas esto y pones el nombre de tu función:
-                  // onEdit: () => _tuFuncionDeEditar(p),
-                  // onDelete: () => _tuFuncionDeEliminar(p),
-                  // onStockChange: (cantidad) => _tuFuncionDeModificarStock(p, cantidad),
+                  onEdit: () => _abrirFormularioProducto(
+                    codigoInicial: p.codigo,
+                    productoExistente: p,
+                  ),
+                  onDelete: () => _eliminarProducto(p),
+                  onStockChange: (cantidad) => _modificarStock(p, cantidad),
                 );
               },
             ),

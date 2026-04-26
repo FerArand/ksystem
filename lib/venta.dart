@@ -401,13 +401,14 @@ class _VentaState extends State<Venta> {
             children: [
               ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 20),
+                    padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 24),
                     backgroundColor: Colores.azulCielo,
-                    foregroundColor: Colors.white
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))
                 ),
                 onPressed: _abrirBusquedaManual,
-                icon: const Icon(Icons.search),
-                label: const Text(""),
+                icon: const Icon(Icons.search, size: 28),
+                label: const Text("BUSCAR", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -609,7 +610,15 @@ class _DialogoBusquedaVentaState extends State<DialogoBusquedaVenta> {
     return AlertDialog(
       title: const Text("Buscar producto manual"),
       content: SizedBox(width: 600, height: 500, child: Column(children: [
-        TextField(autofocus: true, decoration: const InputDecoration(prefixIcon: Icon(Icons.search), hintText: "Escribe...", border: OutlineInputBorder()), onChanged: _buscar),
+        TextField(
+            autofocus: true,
+            decoration: const InputDecoration(
+                prefixIcon: Icon(Icons.search),
+                hintText: "Buscar por Nombre, SKU o Factura...",
+                border: OutlineInputBorder()
+            ),
+            onChanged: _buscar
+        ),
         const SizedBox(height: 10),
         Expanded(child: ListView.separated(separatorBuilder: (c, i) => const Divider(), itemCount: _resultados.length, itemBuilder: (c, i) {
           final p = _resultados[i];
