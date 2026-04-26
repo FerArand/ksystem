@@ -119,9 +119,12 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
   Future<void> _reimprimir(Map<String, dynamic> ticketData) async {
     try {
       double total = (ticketData['total'] is int) ? (ticketData['total'] as int).toDouble() : ticketData['total'];
-      double recibido = ticketData['recibido'] != null
-          ? ((ticketData['recibido'] is int) ? (ticketData['recibido'] as int).toDouble() : ticketData['recibido'])
+      
+      // Intentar leer recibido y cambio guardados, si no existen (ventas viejas) usar lógica por defecto
+      double recibido = ticketData['recibido'] != null 
+          ? ((ticketData['recibido'] is int) ? (ticketData['recibido'] as int).toDouble() : ticketData['recibido']) 
           : total;
+          
       double cambio = ticketData['cambio'] != null
           ? ((ticketData['cambio'] is int) ? (ticketData['cambio'] as int).toDouble() : ticketData['cambio'])
           : 0.0;
@@ -176,9 +179,12 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
                 onPressed: () => _cargarDatosMes(DateTime.now()),
               ),
               const SizedBox(width: 10),
-              IconButton(
+              OutlinedButton.icon(
                 icon: const Icon(Icons.search, color: Colores.azulPrincipal),
-                tooltip: "Buscar Folio de Ticket",
+                label: const Text("Folio", style: TextStyle(color: Colores.azulPrincipal, fontWeight: FontWeight.bold)),
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: Colores.azulPrincipal),
+                ),
                 onPressed: _mostrarBuscadorFolio,
               ),
 

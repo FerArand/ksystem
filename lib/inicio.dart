@@ -321,16 +321,14 @@ class _InicioState extends State<Inicio> {
           // --- BARRA LATERAL (Restaurada al estilo original) ---
           Container(
             width: 230,
-            decoration: BoxDecoration(
+            decoration: const BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
                 colors: [
                   Colores.grisOscuro,
-                  Colores.azulPrincipal.withValues(alpha: 0.1),
-                  Colores.grisOscuro,
+                  Color(0xFF0D1B2A), // Azul muy oscuro (Navy)
                 ],
-                stops: const [0.0, 0.5, 1.0],
               ),
             ),
             child: Column(

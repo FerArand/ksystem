@@ -158,12 +158,18 @@ class _DeudasState extends State<Deudas> {
 
                   // 2. Registrar el ingreso en el calendario (HistoryDB)
                   final fecha = DateFormat('yyyy-MM-dd HH:mm:ss').format(DateTime.now());
+                  
+                  // RECUPERAR ITEMS PARA EL HISTORIAL (Para que la reimpresión sea exacta)
+                  String itemsDeuda = deudor['items'] ?? '[]';
+
                   await HistoryDB.instance.registrarVenta(
                     fecha: fecha,
                     total: abono,
                     costoTotal: 0, // No es venta de stock nuevo, es cobro de deuda
-                    items: '[]', // Podemos dejarlo vacío o poner un JSON descriptivo
-                    cliente: 'Abono de: ${deudor['nombre']}'
+                    items: itemsDeuda, 
+                    recibido: abono,
+                    cambio: 0,
+                    cliente: 'Abono a deuda de: ${deudor['nombre']}'
                   );
 
                   // 3. Generar Ticket de Abono

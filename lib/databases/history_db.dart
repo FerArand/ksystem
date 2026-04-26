@@ -25,6 +25,8 @@ class HistoryDB {
     required double total,
     required double costoTotal,
     required String items,
+    double recibido = 0,
+    double cambio = 0,
     String cliente = "Cliente General"
   }) async {
     final db = await _db;
@@ -36,6 +38,8 @@ class HistoryDB {
       'costo_total': costoTotal,
       'items': items,
       'cliente': cliente,
+      'recibido': recibido,
+      'cambio': cambio,
       'es_activo': 1
     });
 

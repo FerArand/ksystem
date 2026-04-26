@@ -260,6 +260,8 @@ class _VentaState extends State<Venta> {
         total: _total,
         costoTotal: costoTotalVenta,
         items: itemsResumenJson,
+        recibido: _recibido,
+        cambio: (_recibido - _total),
         cliente: 'Mostrador'
     );
 

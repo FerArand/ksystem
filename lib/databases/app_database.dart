@@ -19,19 +19,22 @@ class AppDatabase {
   Future<Database> _initDB(String filePath) async {
     final dbPath = await getApplicationDocumentsDirectory();
     final path = join(dbPath.path, filePath);
-    // version: 1 por ser base nueva. Cuando agregues tablas,
-    // incrementas la versión y usas onUpgrade.
+    // version: 3 para soportar recibido y cambio en historial
     return await openDatabase(
       path,
-      version: 2, // ← sube de 1 a 2
+      version: 3,
       onCreate: _createDB,
-      onUpgrade: onUpgrade, // ← nuevo
+      onUpgrade: onUpgrade,
     );
   }
 
     Future onUpgrade(Database db, int oldVersion, int newVersion) async {
       if (oldVersion < 2) {
         await migrarItemsAJson(db);
+      }
+      if (oldVersion < 3) {
+        await db.execute('ALTER TABLE ventas_historial ADD COLUMN recibido REAL DEFAULT 0');
+        await db.execute('ALTER TABLE ventas_historial ADD COLUMN cambio REAL DEFAULT 0');
       }
     }
 
@@ -127,6 +130,8 @@ class AppDatabase {
         costo_total REAL,
         items TEXT,
         cliente TEXT,
+        recibido REAL,
+        cambio REAL,
         es_activo INTEGER DEFAULT 1
       )
     ''');

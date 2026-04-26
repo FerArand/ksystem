@@ -79,16 +79,16 @@ class ImpresionTicket {
                     pw.Row(
                         mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                         children: [
-                          pw.Text('SU ABONO:', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 9, color: PdfColors.green)),
-                          pw.Text('\$${montoAbonado.toStringAsFixed(2)}', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 9, color: PdfColors.green)),
+                          pw.Text('SU ABONO:', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8)),
+                          pw.Text('\$${montoAbonado.toStringAsFixed(2)}', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8)),
                         ]
                     ),
                     pw.Divider(borderStyle: pw.BorderStyle.dashed),
                     pw.Row(
                         mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                         children: [
-                          pw.Text('SALDO PENDIENTE:', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10, color: PdfColors.red)),
-                          pw.Text('\$${saldoRestante.toStringAsFixed(2)}', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10, color: PdfColors.red)),
+                          pw.Text('SALDO PENDIENTE:', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8)),
+                          pw.Text('\$${saldoRestante.toStringAsFixed(2)}', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8)),
                         ]
                     ),
 
