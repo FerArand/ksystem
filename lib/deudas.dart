@@ -224,7 +224,7 @@ class _DeudasState extends State<Deudas> {
             children: [
               const Icon(Icons.money_off, size: 28, color: Colors.red),
               const SizedBox(width: 10),
-              const Text("Crédito K-Fiado)", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.red)),
+              const Text("Crédito K-Fiado", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.red)),
               const SizedBox(width: 20),
               Expanded(
                 child: TextField(
