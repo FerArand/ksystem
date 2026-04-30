@@ -56,8 +56,8 @@ class _AppError extends StatelessWidget {
                     style: const TextStyle(color: Colors.grey)),
                 const SizedBox(height: 24),
                 const Text(
-                  'No se perdió ningún dato. Cierra y vuelve a abrir la app. '
-                      'Si el error persiste, contacta soporte.',
+                  'No se perdió ningún dato. Reinicia el ksystem. '
+                      'Si el error persiste, contacta a Ferpleis.',
                   textAlign: TextAlign.center,
                   style: TextStyle(fontSize: 12),
                 ),

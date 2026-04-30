@@ -93,8 +93,8 @@ class _DeudasState extends State<Deudas> {
                                     spacing: 8,
                                     children: [
                                       if (item.sku.isNotEmpty) _tag("SKU: ${item.sku}", Colors.blue),
-                                      if (item.precio > 0) _tag("Vendido: \$${item.precio}", Colors.green),
-                                      if (item.costo > 0) _tag("Costo: \$${item.costo}", Colors.grey),
+                                      if (item.precio > 0) _tag("Total: \$${item.precio}", Colors.green),
+                                      if (item.costo > 0) _tag("Mínimo aceptable: \$${item.costo}", Colors.grey),
                                     ],
                                   )
                                 ],
@@ -110,7 +110,7 @@ class _DeudasState extends State<Deudas> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text("DEUDA TOTAL:", style: TextStyle(fontWeight: FontWeight.bold)),
+                    const Text("EL DON DEBE:", style: TextStyle(fontWeight: FontWeight.bold)),
                     Text("\$${deudor['total_deuda'].toStringAsFixed(2)}",
                         style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.red)),
                   ],
@@ -120,7 +120,7 @@ class _DeudasState extends State<Deudas> {
                   controller: abonoCtrl,
                   keyboardType: TextInputType.number,
                   decoration: const InputDecoration(
-                      labelText: "Monto a Abonar/Pagar",
+                      labelText: "Monto a Pagar",
                       prefixText: "\$",
                       border: OutlineInputBorder(),
                       filled: true,
@@ -186,11 +186,11 @@ class _DeudasState extends State<Deudas> {
                   _cargarDeudores();
                   Navigator.pop(ctx);
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text("Abono registrado e ingreso en calendario guardado")),
+                    const SnackBar(content: Text("Pago registrado")),
                   );
                 }
               },
-              child: const Text("REGISTRAR ABONO"),
+              child: const Text("REGISTRAR PAGO 🤑🤙"),
             )
           ],
         )
@@ -224,7 +224,7 @@ class _DeudasState extends State<Deudas> {
             children: [
               const Icon(Icons.money_off, size: 28, color: Colors.red),
               const SizedBox(width: 10),
-              const Text("Registro de Deudas (Fiado)", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.red)),
+              const Text("Crédito K-Fiado)", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.red)),
               const SizedBox(width: 20),
               Expanded(
                 child: TextField(
@@ -283,7 +283,7 @@ class _DeudasState extends State<Deudas> {
                       const SizedBox(width: 20),
                       ElevatedButton.icon(
                         icon: const Icon(Icons.visibility, size: 18),
-                        label: const Text("Ver / Abonar"),
+                        label: const Text("A ver"),
                         onPressed: () => _verDetalle(d),
                         style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.white,

@@ -7,7 +7,7 @@ import 'Utils/impresion_ticket.dart';
 import 'models/producto.dart';
 import 'venta.dart';
 import 'models/item_venta.dart' as modelo;
-import 'widgets/product_card.dart';
+//import 'widgets/product_card.dart';
 import 'databases/app_database.dart';
 
 class CalendarioVentas extends StatefulWidget {
@@ -89,7 +89,7 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
       }
     }
 
-    String nombreTop = "Sin ventas";
+    String nombreTop = "Kebrapose";
     int cantTop = 0;
     if (conteoProductos.isNotEmpty) {
       var sortedKeys = conteoProductos.keys.toList(growable: false)
@@ -225,11 +225,11 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      const Text("PRODUCTO DEL MES", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1.2)),
+                      const Text("Guau,", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1.2)),
                       Text(_topProductoNombre,
                           maxLines: 1, overflow: TextOverflow.ellipsis,
                           style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.blueGrey[800])),
-                      Text("$_topProductoCant unidades vendidas", style: const TextStyle(fontSize: 11, color: Colors.blue)),
+                      Text("No te hará quebrar con sus $_topProductoCant unidades vendidas!", style: const TextStyle(fontSize: 11, color: Colors.blue)),
                     ],
                   ),
                 ),
@@ -315,7 +315,7 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Text("SEMANA", style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.blueGrey)),
+                const Text("Resumen de la SEMANA", style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.blueGrey)),
                 Text("\$${semVenta.toStringAsFixed(0)}",
                     style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: Colors.blue)),
                 Text("G: \$${semGan.toStringAsFixed(0)}",
@@ -419,7 +419,7 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text("Detalle del $dia de ${DateFormat('MMMM').format(_fechaActual)}", style: const TextStyle(color: Colors.white, fontSize: 20)),
+                      Text("Desglose del $dia de ${DateFormat('MMMM').format(_fechaActual)}", style: const TextStyle(color: Colors.white, fontSize: 20)),
                       IconButton(icon: const Icon(Icons.close, color: Colors.white), onPressed: () => Navigator.pop(ctx))
                     ],
                   ),
@@ -433,8 +433,8 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
                         const TabBar(
                           labelColor: Colors.black, indicatorColor: Colores.azulPrincipal,
                           tabs: [
-                            Tab(icon: Icon(Icons.inventory), text: "Resumen Productos (Lotes)"),
-                            Tab(icon: Icon(Icons.receipt), text: "Bitácora de Tickets"),
+                            Tab(icon: Icon(Icons.inventory), text: "Productos Vendidos"),
+                            Tab(icon: Icon(Icons.receipt), text: "Reimpresión de Tickets"),
                           ],
                         ),
                         Expanded(child: TabBarView(children: [_buildResumenProductos(tickets), _buildListaTickets(tickets)])),
@@ -448,12 +448,12 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
-                      _infoBox("COSTO TOTAL", tCosto, Colors.red),
+                      _infoBox("COSTO", tCosto, Colors.red),
                       const SizedBox(width: 30),
-                      _infoBox("VENTA BRUTA", tVenta, Colors.black),
+                      _infoBox("LIQUIDEZ", tVenta, Colors.black),
                       const SizedBox(width: 30),
                       const VerticalDivider(),
-                      _infoBox("GANANCIA NETA", tVenta - tCosto, Colors.green),
+                      _infoBox("PA LOS CHETOS 🤑", tVenta - tCosto, Colors.green),
                     ],
                   ),
                 )
@@ -469,23 +469,23 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text("Buscar Folio de Ticket"),
+        title: const Text("Ingresa el Folio de Ticket"),
         content: TextField(
           controller: folioCtrl,
           keyboardType: TextInputType.number,
           autofocus: true,
           decoration: const InputDecoration(
             labelText: "Número de Folio",
-            hintText: "Ej. 514",
+            hintText: "Ej. 217",
             border: OutlineInputBorder(),
           ),
           onSubmitted: (v) => _ejecutarBusquedaFolio(v, ctx),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancelar")),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Siempre no")),
           ElevatedButton(
             onPressed: () => _ejecutarBusquedaFolio(folioCtrl.text, ctx),
-            child: const Text("BUSCAR"),
+            child: const Text("Vamos!"),
           ),
         ],
       ),
@@ -502,7 +502,7 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
 
     if (venta == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Folio no encontrado"), backgroundColor: Colors.red),
+        const SnackBar(content: Text("No hayé na, Pa"), backgroundColor: Colors.red),
       );
       return;
     }
@@ -536,7 +536,7 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
 
   // --- BITÁCORA DE TICKETS ---
   Widget _buildListaTickets(List<Map<String, dynamic>> tickets) {
-    if (tickets.isEmpty) return const Center(child: Text("Sin movimientos."));
+    if (tickets.isEmpty) return const Center(child: Text("Quebramos ya"));
     return ListView.separated(
       padding: const EdgeInsets.all(20),
       separatorBuilder: (c, i) => const Divider(),
@@ -601,7 +601,7 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
 
   // --- RESUMEN DE PRODUCTOS ---
   Widget _buildResumenProductos(List<Map<String, dynamic>> tickets) {
-    if (tickets.isEmpty) return const Center(child: Text("Sin ventas."));
+    if (tickets.isEmpty) return const Center(child: Text("Kebrapose"));
 
     Map<String, dynamic> consolidado = {};
     Map<String, dynamic> abonos = {};
@@ -717,7 +717,7 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
                       children: [
                         _tag("SKU: $skuFinal", Colors.blue),
                         const SizedBox(width: 10),
-                        _tag("STOCK ACTUAL: $stock", int.tryParse(stock) != null && int.parse(stock) < 5 ? Colors.red : Colors.orange),
+                        _tag("AÚN QUEDAN: $stock", int.tryParse(stock) != null && int.parse(stock) < 5 ? Colors.red : Colors.orange),
                       ],
                     ),
                     const SizedBox(height: 8),

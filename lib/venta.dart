@@ -101,7 +101,7 @@ class _VentaState extends State<Venta> {
             codigoInicial: codigo,
             onGuardado: (nuevoProducto) {
               _agregarItemLogica(nuevoProducto);
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Producto creado y agregado.")));
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("A vender!")));
             }
         )
     );
@@ -129,11 +129,11 @@ class _VentaState extends State<Venta> {
     await showDialog(
         context: context,
         builder: (ctx) => AlertDialog(
-          title: const Text("FIADO - Asignar Deuda"),
+          title: const Text("Un deudor más"),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text("Ingresa el nombre del cliente."),
+              const Text("Ingresa el nombre del malhechor."),
               const SizedBox(height: 10),
               TextField(
                 controller: nombreDeudorCtrl,
@@ -141,11 +141,11 @@ class _VentaState extends State<Venta> {
                 decoration: const InputDecoration(labelText: "Nombre del Cliente", border: OutlineInputBorder(), prefixIcon: Icon(Icons.person)),
               ),
               const SizedBox(height: 10),
-              Text("Total: \$${_total.toStringAsFixed(2)}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.red))
+              Text("A deber: \$${_total.toStringAsFixed(2)}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.red))
             ],
           ),
           actions: [
-            TextButton(onPressed: ()=>Navigator.pop(ctx), child: const Text("Cancelar")),
+            TextButton(onPressed: ()=>Navigator.pop(ctx), child: const Text("No, si pagará")),
             ElevatedButton(
                 style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
                 onPressed: () async {
@@ -162,9 +162,9 @@ class _VentaState extends State<Venta> {
                   if (!mounted) return; // Protección del contexto
                   Navigator.pop(ctx);
                   _limpiarTodo();
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Fiado registrado a $nombre")));
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Quedó a nombre de $nombre, consúltalo en el apartado!")));
                 },
-                child: const Text("CONFIRMAR FIADO")
+                child: const Text("Confirmar")
             )
           ],
         )
@@ -222,7 +222,7 @@ class _VentaState extends State<Venta> {
             productoExistente: item.producto,
             onGuardado: (p) {
               setState(() { item.producto = p; _calcularTotal(); });
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Producto actualizado")));
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Shhh, aquí nadie vió 🫣🫣")));
             }
         )
     );
@@ -232,7 +232,7 @@ class _VentaState extends State<Venta> {
   Future<void> _finalizarVenta() async {
     if (_carrito.isEmpty) return;
     if (_recibido < _total) {
-      _alerta("Pago insuficiente", "Falta dinero.");
+      _alerta("No alcanza joven", "Le falta lo que se necesita.");
       return;
     }
 
@@ -280,7 +280,7 @@ class _VentaState extends State<Venta> {
           folioVenta: ventaId
       );
     } catch (e) {
-      debugPrint("Error al imprimir: $e");
+      debugPrint("No se imprimió nada: $e");
     }
 
     if (!mounted) return;
@@ -380,7 +380,7 @@ class _VentaState extends State<Venta> {
           const Spacer(),
           IconButton(
             icon: const Icon(Icons.refresh, color: Colors.grey),
-            tooltip: "Limpiar calculadora",
+            tooltip: "Limpiar",
             onPressed: () {
               _calcBaseLen.clear();
               _calcBasePrecio.clear();
@@ -419,7 +419,7 @@ class _VentaState extends State<Venta> {
                   focusNode: _focusNode,
                   autofocus: true,
                   decoration: const InputDecoration(
-                      labelText: "Escanea código de barras aquí...",
+                      labelText: "Escanea código de barras AQUÍ!",
                       border: OutlineInputBorder(),
                       prefixIcon: Icon(Icons.qr_code_scanner),
                       filled: true,
@@ -441,7 +441,7 @@ class _VentaState extends State<Venta> {
                   child: Container(
                     decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade300), color: Colors.white),
                     child: _carrito.isEmpty
-                        ? const Center(child: Text("Carrito vacío", style: TextStyle(color: Colors.grey, fontSize: 20)))
+                        ? const Center(child: Text("Vendemos?", style: TextStyle(color: Colors.grey, fontSize: 20)))
                         : ListView.separated(
                       separatorBuilder: (ctx, i) => const Divider(height: 1),
                       itemCount: _carrito.length,
@@ -460,7 +460,7 @@ class _VentaState extends State<Venta> {
                                   children: [
                                     Text(p.descripcion, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                                     // Stock puede ser negativo, se muestra tal cual
-                                    Text("\$${p.precio.toStringAsFixed(2)} c/u  |  Disp: ${p.stock}",
+                                    Text("\$${p.precio.toStringAsFixed(2)} c/u  |  Quedan: ${p.stock}",
                                         style: TextStyle(color: p.stock <= 0 ? Colors.red : Colors.grey[700], fontSize: 13)
                                     ),
                                   ],
@@ -497,7 +497,7 @@ class _VentaState extends State<Venta> {
                               const SizedBox(width: 10),
                               IconButton(
                                 icon: const Icon(Icons.edit, color: Colors.orange),
-                                tooltip: "Editar info del producto",
+                                tooltip: "Editar producto",
                                 onPressed: () => _editarProductoEnVenta(item),
                               ),
                               IconButton(
@@ -558,14 +558,14 @@ class _VentaState extends State<Venta> {
                               style: ElevatedButton.styleFrom(backgroundColor: Colores.verde),
                               onPressed: _finalizarVenta,
                               icon: const Icon(Icons.check_circle, size: 30),
-                              label: const Text("COBRAR", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                              label: const Text("Vendimos!", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
                             ),
                           ),
                           const SizedBox(height: 10),
                           TextButton.icon(
                             onPressed: _crearFiado,
                             icon: const Icon(Icons.note_add, color: Colors.red),
-                            label: const Text("FIADO (Deuda)", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+                            label: const Text("Hoy fío, mañana no", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
                           )
                         ],
                       ),
@@ -610,13 +610,13 @@ class _DialogoBusquedaVentaState extends State<DialogoBusquedaVenta> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text("Buscar producto manual"),
+      title: const Text("Buscar producto (Ahora también con SKU!)"),
       content: SizedBox(width: 600, height: 500, child: Column(children: [
         TextField(
             autofocus: true,
             decoration: const InputDecoration(
                 prefixIcon: Icon(Icons.search),
-                hintText: "Buscar por Nombre, SKU o Factura...",
+                hintText: "Escribe lo que sea, lo encontraré",
                 border: OutlineInputBorder()
             ),
             onChanged: _buscar
@@ -624,10 +624,10 @@ class _DialogoBusquedaVentaState extends State<DialogoBusquedaVenta> {
         const SizedBox(height: 10),
         Expanded(child: ListView.separated(separatorBuilder: (c, i) => const Divider(), itemCount: _resultados.length, itemBuilder: (c, i) {
           final p = _resultados[i];
-          return ListTile(title: Text(p.descripcion, style: const TextStyle(fontWeight: FontWeight.bold)), subtitle: Text("\$${p.precio} | Stock: ${p.stock}"), trailing: ElevatedButton(child: const Text("AGREGAR"), onPressed: () => widget.onSeleccionado(p)));
+          return ListTile(title: Text(p.descripcion, style: const TextStyle(fontWeight: FontWeight.bold)), subtitle: Text("\$${p.precio} | Stock: ${p.stock}"), trailing: ElevatedButton(child: const Text("A vender!"), onPressed: () => widget.onSeleccionado(p)));
         }))
       ])),
-      actions: [TextButton(onPressed: ()=>Navigator.pop(context), child: const Text("Cancelar"))],
+      actions: [TextButton(onPressed: ()=>Navigator.pop(context), child: const Text("Siempre no"))],
     );
   }
 }

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+/*import 'package:flutter/material.dart';
 import 'databases/history_db.dart';
 import 'constants/colores.dart';
 import 'widgets/dialogo_recibo.dart';
@@ -166,4 +166,4 @@ class _HistorialVentasState extends State<HistorialVentas> {
       ],
     );
   }
-}
+}*/

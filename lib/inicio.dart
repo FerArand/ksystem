@@ -125,17 +125,17 @@ class _InicioState extends State<Inicio> {
           ..createSync(recursive: true)
           ..writeAsBytesSync(fileBytes);
 
-        _mostrarAlerta("Exportación Exitosa", "Se han exportado todas las tablas (Inventario, Ventas, Deudas, Ingresos) en hojas separadas.\n\nArchivo guardado en:\n$filePath");
+        _mostrarAlerta("Exportaste!", "Ahora ya tienes tu \"Base de datos\" en excel.\n\nDisfrútala en:\n$filePath");
       }
     } catch (e) {
-      _mostrarAlerta("Error Exportar", e.toString());
+      _mostrarAlerta("Error al Exportar", e.toString());
     } finally {
       setState(() => _importando = false);
     }
   }
 
   // ------------------------------------------
-  // IMPORTAR DESDE EXCEL (Smart Import con Detección de Duplicados)
+  // IMPORTAR DESDE EXCEL (Master Sync - Sobrescribe Inventario)
   // ------------------------------------------
   Future<void> _importarExcel() async {
     setState(() => _importando = true);
@@ -149,14 +149,13 @@ class _InicioState extends State<Inicio> {
         var bytes = File(result.files.single.path!).readAsBytesSync();
         var excel = Excel.decodeBytes(bytes);
 
-        // Priorizamos la hoja de 'Inventario' o la primera que encontremos
+        // Priorizamos la hoja de 'Inventario'
         Sheet? sheet = excel.tables['Inventario'] ?? excel.tables['Precios MENUDEO'];
         sheet ??= excel.tables[excel.tables.keys.first];
 
         if (sheet != null && sheet.maxRows > 1) {
           
-          List<Producto> productosNuevos = [];
-          List<Producto> productosDuplicados = [];
+          List<Producto> productosDelExcel = [];
 
           // Helpers seguros
           dynamic val(List<Data?> row, int i) => (i < row.length) ? row[i]?.value : null;
@@ -182,7 +181,7 @@ class _InicioState extends State<Inicio> {
 
             if (descripcion.isEmpty) continue;
 
-            Producto p = Producto(
+            productosDelExcel.add(Producto(
                 codigo: codigo,
                 sku: sku,
                 factura: factura,
@@ -193,86 +192,52 @@ class _InicioState extends State<Inicio> {
                 precioRappi: rappi,
                 stock: stock,
                 borrado: false
-            );
-
-            // DETECCIÓN INTELIGENTE DE DUPLICADOS
-            Map<String, dynamic>? existente;
-            
-            // 1. Por Código exacto
-            if (codigo.isNotEmpty && !codigo.startsWith("GEN-")) {
-              existente = await DBHelper.instance.getProductoPorCodigo(codigo);
-            }
-            
-            // 2. Por SKU (si no es N/A ni vacío)
-            if (existente == null && sku.isNotEmpty && sku != "N/A") {
-              var porSku = await DBHelper.instance.getProductoPorCodigo(sku);
-              if (porSku != null) existente = porSku;
-            }
-
-            // 3. Por Descripción exacta
-            if (existente == null) {
-              var porNombre = await DBHelper.instance.buscarProductos(descripcion);
-              existente = porNombre.firstWhere(
-                (e) => e['descripcion'].toString().toLowerCase() == descripcion.toLowerCase(),
-                orElse: () => {}
-              );
-              if (existente.isEmpty) existente = null;
-            }
-
-            if (existente != null) {
-              p.id = existente['id'];
-              productosDuplicados.add(p);
-            } else {
-              productosNuevos.add(p);
-            }
+            ));
           }
 
-          // DECISIÓN DEL USUARIO
-          bool actualizar = false;
-          bool cancelar = false;
-
-          if (productosDuplicados.isNotEmpty) {
-            await showDialog(
-              context: context,
-              barrierDismissible: false,
-              builder: (ctx) => AlertDialog(
-                title: const Text("⚠️ Productos Duplicados"),
-                content: Text(
-                    "Se encontraron ${productosDuplicados.length} productos que ya existen en el sistema.\n\n"
-                    "¿Deseas actualizar la información de estos productos (Precios, Stock, etc.) con los datos del Excel?"
+          // ADVERTENCIA DE SOBRESCRITURA
+          bool confirmar = false;
+          await showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (ctx) => AlertDialog(
+              title: const Text("ADVERTENCIA: SOBRESCRITURA TOTAL"),
+              content: Text(
+                  "Estás a punto de sincronizar el inventario.\n\n"
+                  "1. Explotarán todos los productos actuales del ksystem.\n"
+                  "2. Se cargarán ${productosDelExcel.length} productos desde el Excel.\n\n"
+                  "¿Procedemos con la sobrescritura del K-inventario?"
+              ),
+              actions: [
+                TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("jaja, No")),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+                  onPressed: () { confirmar = true; Navigator.pop(ctx); },
+                  child: const Text("See, que mueran todos!"),
                 ),
-                actions: [
-                  TextButton(onPressed: () { cancelar = true; Navigator.pop(ctx); }, child: const Text("CANCELAR")),
-                  TextButton(onPressed: () { actualizar = false; Navigator.pop(ctx); }, child: const Text("IGNORAR DUPLICADOS")),
-                  ElevatedButton(onPressed: () { actualizar = true; Navigator.pop(ctx); }, child: const Text("ACTUALIZAR DATOS")),
-                ],
-              )
-            );
-          }
+              ],
+            )
+          );
 
-          if (cancelar) return;
+          if (!confirmar) return;
 
-          // GUARDAR CAMBIOS
-          int nuevos = 0;
-          int actualizados = 0;
-
-          for (var p in productosNuevos) {
-            await DBHelper.instance.insertProducto(p.aMapa());
-            nuevos++;
-          }
-
-          if (actualizar) {
-            for (var p in productosDuplicados) {
-              await DBHelper.instance.updateProducto(p.aMapa());
-              actualizados++;
+          // EJECUCIÓN MAESTRA (Transacción)
+          final db = await DBHelper.instance.database;
+          await db.transaction((txn) async {
+            // 1. Borrar tabla productos
+            await txn.delete('productos');
+            
+            // 2. Insertar nuevos
+            for (var p in productosDelExcel) {
+              await txn.insert('productos', p.aMapa());
             }
-          }
+          });
 
-          _mostrarAlerta("Importación Exitosa", "Proceso completado:\n\n- Nuevos: $nuevos\n- Actualizados: $actualizados");
+          _mostrarAlerta("Felicidades!", "Los productos de la aplicación ahora son los del excel.\n\nTotal productos cargados: ${productosDelExcel.length}");
         }
       }
     } catch (e) {
-      _mostrarAlerta("Error Importar", e.toString());
+      _mostrarAlerta("Error al Importar", e.toString());
     } finally {
       setState(() => _importando = false);
     }
@@ -297,7 +262,7 @@ class _InicioState extends State<Inicio> {
         children: [
           CircularProgressIndicator(),
           SizedBox(height: 20),
-          Text("Recalculando precios y procesando..."),
+          Text("Analizando precios..."),
         ],
       ));
     }
@@ -342,10 +307,10 @@ class _InicioState extends State<Inicio> {
 
                 // MENÚ PRINCIPAL
                 _buildMenuItem(Icons.point_of_sale, 'Venta', 'venta'),
-                _buildMenuItem(Icons.money_off, 'Deudas / Fiado', 'deudas'),
+                _buildMenuItem(Icons.money_off, 'Fiado', 'deudas'),
                 _buildMenuItem(Icons.calendar_month, 'Calendario', 'calendario'), // Reemplaza a Historial y Ventas Hoy
-                _buildMenuItem(Icons.add_circle_outline, 'Añadir', 'anadir'),
-                _buildMenuItem(Icons.warning_amber_rounded, 'Agotados', 'agotados'),
+                _buildMenuItem(Icons.add_circle_outline, 'Añadir Pro', 'anadir'),
+                _buildMenuItem(Icons.warning_amber_rounded, 'Pa resurtir', 'agotados'),
                 _buildMenuItem(Icons.list_alt, 'Consultar', 'consultar'),
 
                 const Divider(color: Colors.grey),
@@ -369,7 +334,7 @@ class _InicioState extends State<Inicio> {
                   padding: EdgeInsets.only(left: 20, bottom: 20),
                   child: Align(
                     alignment: Alignment.centerLeft,
-                    child: Text("v2.0.0", style: TextStyle(color: Colors.white30, fontSize: 12, fontWeight: FontWeight.bold)),
+                    child: Text("v2.0.1", style: TextStyle(color: Colors.white30, fontSize: 12, fontWeight: FontWeight.bold)),
                   ),
                 )
               ],

@@ -101,10 +101,10 @@ class _NuevoIngresoState extends State<NuevoIngreso> {
         context: context,
         builder: (ctx) => AlertDialog(
           title: const Text("¿Eliminar Producto del Sistema?"),
-          content: Text("Se borrará definitivamente: ${p.descripcion}"),
+          content: Text("${p.descripcion} Hará K-Boom"),
           actions: [
-            TextButton(onPressed: ()=>Navigator.pop(ctx, false), child: const Text("Cancelar")),
-            TextButton(onPressed: ()=>Navigator.pop(ctx, true), child: const Text("BORRAR", style: TextStyle(color: Colors.red))),
+            TextButton(onPressed: ()=>Navigator.pop(ctx, false), child: const Text("Mejor no")),
+            TextButton(onPressed: ()=>Navigator.pop(ctx, true), child: const Text("Dinamítalo! 💥", style: TextStyle(color: Colors.red))),
           ],
         )
     );
@@ -114,7 +114,7 @@ class _NuevoIngresoState extends State<NuevoIngreso> {
       setState(() {
         _agregadosRecientemente.removeWhere((e) => e.id == p.id);
       });
-      _notificar("Producto eliminado.");
+      _notificar("💥 KBoom (Incerte sonido de explosión) 💥.");
     }
   }
 
@@ -174,7 +174,7 @@ class _NuevoIngresoState extends State<NuevoIngreso> {
             focusNode: _scannerFocus,
             autofocus: true,
             decoration: const InputDecoration(
-                labelText: "AÑADIR: Escanea para sumar, crear o editar",
+                labelText: "Escanea un producto para sumar o crear",
                 prefixIcon: Icon(Icons.qr_code_2, size: 30),
                 border: OutlineInputBorder(),
                 filled: true,
@@ -187,7 +187,7 @@ class _NuevoIngresoState extends State<NuevoIngreso> {
             child: _cargando
                 ? const Center(child: CircularProgressIndicator())
                 : _agregadosRecientemente.isEmpty
-                ? const Center(child: Text("Sin actividad reciente.", style: TextStyle(color: Colors.grey, fontSize: 18)))
+                ? const Center(child: Text("No ha llegado na", style: TextStyle(color: Colors.grey, fontSize: 18)))
                 : ListView.builder(
               itemCount: _agregadosRecientemente.length,
               itemBuilder: (context, i) {
@@ -250,7 +250,7 @@ class _DialogoVincularState extends State<DialogoVincular> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text("¿Qué producto es?"),
+      title: const Text("K-es eso?"),
       content: SizedBox(
         width: 500,
         height: 400,
@@ -262,14 +262,14 @@ class _DialogoVincularState extends State<DialogoVincular> {
               child: Row(children: [
                 const Icon(Icons.warning, color: Colors.orange),
                 const SizedBox(width: 10),
-                Expanded(child: Text("El código '${widget.codigoEscaneado}' no existe. Busca abajo para vincularlo o crea uno nuevo."))
+                Expanded(child: Text("El código '${widget.codigoEscaneado}' no existe. Busca abajo para vincularlo o CREA uno nuevo."))
               ]),
             ),
             const SizedBox(height: 10),
             TextField(
               controller: _searchCtrl,
               autofocus: true,
-              decoration: const InputDecoration(labelText: "Buscar por Nombre o Factura...", prefixIcon: Icon(Icons.search), border: OutlineInputBorder()),
+              decoration: const InputDecoration(labelText: "Buscar por Nombre o Sku...", prefixIcon: Icon(Icons.search), border: OutlineInputBorder()),
               onChanged: _buscar,
             ),
             const SizedBox(height: 10),
@@ -277,18 +277,18 @@ class _DialogoVincularState extends State<DialogoVincular> {
               child: _buscando
                   ? const Center(child: CircularProgressIndicator())
                   : _resultados.isEmpty
-                  ? const Center(child: Text("Sin resultados. Si no aparece, es nuevo."))
+                  ? const Center(child: Text("Búscale, sino pícale acá abajo en \"NUEVO\""))
                   : ListView.builder(
                 itemCount: _resultados.length,
                 itemBuilder: (ctx, i) {
                   final p = _resultados[i];
                   return ListTile(
                     title: Text(p.descripcion, maxLines: 1, overflow: TextOverflow.ellipsis),
-                    subtitle: Text("Factura: ${p.factura} | Stock: ${p.stock}"),
+                    subtitle: Text("Sku: ${p.sku} | Stock: ${p.stock}"),
                     trailing: ElevatedButton.icon(
                       style: ElevatedButton.styleFrom(backgroundColor: Colores.azulCielo),
                       icon: const Icon(Icons.link, size: 16),
-                      label: const Text("ES ESTE"),
+                      label: const Text("Vincular"),
                       onPressed: () => widget.onVincular(p),
                     ),
                   );
@@ -299,8 +299,8 @@ class _DialogoVincularState extends State<DialogoVincular> {
         ),
       ),
       actions: [
-        TextButton(onPressed: widget.onCrearNuevo, child: const Text("No está en la lista: ES NUEVO")),
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancelar")),
+        TextButton(onPressed: widget.onCrearNuevo, child: const Text("Caray, ha de ser NUEVO")),
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancela")),
       ],
     );
   }
