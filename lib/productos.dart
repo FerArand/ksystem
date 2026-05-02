@@ -57,11 +57,11 @@ class _ProductosState extends State<Productos> {
     bool? conf = await showDialog(
         context: context,
         builder: (c) => AlertDialog(
-            title: const Text("¿Eliminar Producto del Sistema?"),
-            content: Text("${p.descripcion} Hará K-Boom"),
+            title: const Text("¿Eliminar producto del sistema?"),
+            content: Text("Se eliminará '${p.descripcion}' definitivamente."),
             actions: [
-              TextButton(onPressed: ()=>Navigator.pop(c, false), child: const Text("Siempre no")),
-              TextButton(onPressed: ()=>Navigator.pop(c, true), child: const Text("Dinamítalo! 💥", style: TextStyle(color: Colors.red))),
+              TextButton(onPressed: ()=>Navigator.pop(c, false), child: const Text("Cancelar")),
+              TextButton(onPressed: ()=>Navigator.pop(c, true), child: const Text("Eliminar", style: TextStyle(color: Colors.red))),
             ]
         )
     );
@@ -69,7 +69,7 @@ class _ProductosState extends State<Productos> {
     if(conf == true) {
       await DBHelper.instance.deleteProducto(p.id!);
       _cargarProductos();
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("💥 KBoom (Incerte sonido de explosión) 💥.")));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Producto eliminado.")));
     }
   }
 
@@ -100,7 +100,7 @@ class _ProductosState extends State<Productos> {
           child: TextField(
             controller: _searchController,
             decoration: const InputDecoration(
-                labelText: "Busca por lo que quieras, saldrá de alguna manera 😈",
+                labelText: "Buscar producto...",
                 prefixIcon: Icon(Icons.search),
                 border: OutlineInputBorder(),
                 filled: true,
@@ -119,7 +119,7 @@ class _ProductosState extends State<Productos> {
           child: _cargando
               ? const Center(child: CircularProgressIndicator())
               : _listaProductos.isEmpty
-              ? const Center(child: Text("jaja, No hay", style: TextStyle(color: Colors.grey)))
+              ? const Center(child: Text("No se encontraron productos", style: TextStyle(color: Colors.grey)))
               : ListView.builder(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             itemCount: _listaProductos.length,

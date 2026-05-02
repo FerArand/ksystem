@@ -8,6 +8,7 @@ import 'Utils/impresion_ticket.dart';
 import 'databases/history_db.dart';
 import 'databases/debt_db.dart';
 import 'widgets/product_form_dialog.dart';
+import 'factura_form.dart';
 import 'models/item_venta.dart' as modelo;
 import 'package:flutter/material.dart';
 
@@ -101,7 +102,7 @@ class _VentaState extends State<Venta> {
             codigoInicial: codigo,
             onGuardado: (nuevoProducto) {
               _agregarItemLogica(nuevoProducto);
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("A vender!")));
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Producto agregado")));
             }
         )
     );
@@ -129,11 +130,11 @@ class _VentaState extends State<Venta> {
     await showDialog(
         context: context,
         builder: (ctx) => AlertDialog(
-          title: const Text("Un deudor más"),
+          title: const Text("Registro de Deuda"),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text("Ingresa el nombre del malhechor."),
+              const Text("Ingrese el nombre del cliente."),
               const SizedBox(height: 10),
               TextField(
                 controller: nombreDeudorCtrl,
@@ -145,7 +146,7 @@ class _VentaState extends State<Venta> {
             ],
           ),
           actions: [
-            TextButton(onPressed: ()=>Navigator.pop(ctx), child: const Text("No, si pagará")),
+            TextButton(onPressed: ()=>Navigator.pop(ctx), child: const Text("Cancelar")),
             ElevatedButton(
                 style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
                 onPressed: () async {
@@ -222,7 +223,7 @@ class _VentaState extends State<Venta> {
             productoExistente: item.producto,
             onGuardado: (p) {
               setState(() { item.producto = p; _calcularTotal(); });
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Shhh, aquí nadie vió 🫣🫣")));
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Se guardó correctamente.")));
             }
         )
     );
@@ -232,7 +233,7 @@ class _VentaState extends State<Venta> {
   Future<void> _finalizarVenta() async {
     if (_carrito.isEmpty) return;
     if (_recibido < _total) {
-      _alerta("No alcanza joven", "Le falta lo que se necesita.");
+      _alerta("Monto insuficiente", "El dinero recibido es menor al total.");
       return;
     }
 
@@ -284,7 +285,47 @@ class _VentaState extends State<Venta> {
     }
 
     if (!mounted) return;
+    
+    // GENERAR PDF PARA EL FORMULARIO (Si elige facturar)
+    final ticketPdf = await ImpresionTicket.generarPdfTicket(
+        items: _carrito,
+        total: _total,
+        recibido: _recibido,
+        cambio: (_recibido - _total),
+        folioVenta: ventaId
+    );
+
+    // PREGUNTA SI DESEA FACTURA
+    await _preguntarFactura(ventaId, ticketPdf);
+
     _limpiarTodo();
+  }
+
+  Future<void> _preguntarFactura(int ventaId, List<int> ticketPdf) async {
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: const Text("¿Desea Factura?"),
+        content: const Text("Se enviará la solicitud con los datos fiscales y una copia del ticket."),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("NO", style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => FacturaForm(ventaId: ventaId, ticketPdf: ticketPdf)),
+              );
+            },
+            child: const Text("SÍ, FACTURAR"),
+          ),
+        ],
+      ),
+    );
   }
 
   void _limpiarTodo() {
@@ -441,7 +482,7 @@ class _VentaState extends State<Venta> {
                   child: Container(
                     decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade300), color: Colors.white),
                     child: _carrito.isEmpty
-                        ? const Center(child: Text("Vendemos?", style: TextStyle(color: Colors.grey, fontSize: 20)))
+                        ? const Center(child: Text("Carrito vacío", style: TextStyle(color: Colors.grey, fontSize: 20)))
                         : ListView.separated(
                       separatorBuilder: (ctx, i) => const Divider(height: 1),
                       itemCount: _carrito.length,
@@ -558,14 +599,14 @@ class _VentaState extends State<Venta> {
                               style: ElevatedButton.styleFrom(backgroundColor: Colores.verde),
                               onPressed: _finalizarVenta,
                               icon: const Icon(Icons.check_circle, size: 30),
-                              label: const Text("Vendimos!", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                              label: const Text("COBRAR", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
                             ),
                           ),
                           const SizedBox(height: 10),
                           TextButton.icon(
                             onPressed: _crearFiado,
                             icon: const Icon(Icons.note_add, color: Colors.red),
-                            label: const Text("Hoy fío, mañana no", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+                            label: const Text("Fiado", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
                           )
                         ],
                       ),
@@ -610,13 +651,13 @@ class _DialogoBusquedaVentaState extends State<DialogoBusquedaVenta> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text("Buscar producto (Ahora también con SKU!)"),
+      title: const Text("Buscar producto"),
       content: SizedBox(width: 600, height: 500, child: Column(children: [
         TextField(
             autofocus: true,
             decoration: const InputDecoration(
                 prefixIcon: Icon(Icons.search),
-                hintText: "Escribe lo que sea, lo encontraré",
+                hintText: "Escribe el nombre o SKU",
                 border: OutlineInputBorder()
             ),
             onChanged: _buscar
@@ -624,10 +665,10 @@ class _DialogoBusquedaVentaState extends State<DialogoBusquedaVenta> {
         const SizedBox(height: 10),
         Expanded(child: ListView.separated(separatorBuilder: (c, i) => const Divider(), itemCount: _resultados.length, itemBuilder: (c, i) {
           final p = _resultados[i];
-          return ListTile(title: Text(p.descripcion, style: const TextStyle(fontWeight: FontWeight.bold)), subtitle: Text("\$${p.precio} | Stock: ${p.stock}"), trailing: ElevatedButton(child: const Text("A vender!"), onPressed: () => widget.onSeleccionado(p)));
+          return ListTile(title: Text(p.descripcion, style: const TextStyle(fontWeight: FontWeight.bold)), subtitle: Text("\$${p.precio} | Stock: ${p.stock}"), trailing: ElevatedButton(child: const Text("Agregar"), onPressed: () => widget.onSeleccionado(p)));
         }))
       ])),
-      actions: [TextButton(onPressed: ()=>Navigator.pop(context), child: const Text("Siempre no"))],
+      actions: [TextButton(onPressed: ()=>Navigator.pop(context), child: const Text("Cancelar"))],
     );
   }
 }

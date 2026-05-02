@@ -116,9 +116,23 @@ class HistoryDB {
         SUM(total) as total_venta,
         SUM(costo_total) as total_costo
       FROM ventas_historial
-      WHERE fecha LIKE ?
+      WHERE fecha LIKE ? AND es_activo = 1
       GROUP BY substr(fecha, 1, 10)
     ''', [fechaLike]);
+  }
+
+  // NUEVO: Obtener resumen por rango de fechas (para calendario de semanas completas)
+  Future<List<Map<String, dynamic>>> obtenerVentasRango(String fechaInicio, String fechaFin) async {
+    final db = await _db;
+    return await db.rawQuery('''
+      SELECT 
+        substr(fecha, 1, 10) as fecha_dia, 
+        SUM(total) as total_venta,
+        SUM(costo_total) as total_costo
+      FROM ventas_historial
+      WHERE substr(fecha, 1, 10) BETWEEN ? AND ? AND es_activo = 1
+      GROUP BY substr(fecha, 1, 10)
+    ''', [fechaInicio, fechaFin]);
   }
 
   // 2. Obtener el producto más vendido del mes (Para la cabecera)

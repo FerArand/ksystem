@@ -125,10 +125,10 @@ class _InicioState extends State<Inicio> {
           ..createSync(recursive: true)
           ..writeAsBytesSync(fileBytes);
 
-        _mostrarAlerta("Exportaste!", "Ahora ya tienes tu \"Base de datos\" en excel.\n\nDisfrútala en:\n$filePath");
+        _mostrarAlerta("Exportación Exitosa", "Se ha generado el respaldo en Excel correctamente.\n\nUbicación:\n$filePath");
       }
     } catch (e) {
-      _mostrarAlerta("Error al Exportar", e.toString());
+      _mostrarAlerta("Error al exportar", e.toString());
     } finally {
       setState(() => _importando = false);
     }
@@ -201,19 +201,19 @@ class _InicioState extends State<Inicio> {
             context: context,
             barrierDismissible: false,
             builder: (ctx) => AlertDialog(
-              title: const Text("ADVERTENCIA: SOBRESCRITURA TOTAL"),
+              title: const Text("ADVERTENCIA: SINCRONIZACIÓN DE INVENTARIO"),
               content: Text(
-                  "Estás a punto de sincronizar el inventario.\n\n"
-                  "1. Explotarán todos los productos actuales del ksystem.\n"
+                  "Se procederá a actualizar el inventario con los datos del archivo seleccionado.\n\n"
+                  "1. Se eliminarán los productos actuales.\n"
                   "2. Se cargarán ${productosDelExcel.length} productos desde el Excel.\n\n"
-                  "¿Procedemos con la sobrescritura del K-inventario?"
+                  "¿Desea continuar con la sincronización?"
               ),
               actions: [
-                TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("jaja, No")),
+                TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancelar")),
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
                   onPressed: () { confirmar = true; Navigator.pop(ctx); },
-                  child: const Text("See, que mueran todos!"),
+                  child: const Text("Confirmar Sincronización"),
                 ),
               ],
             )
@@ -233,11 +233,11 @@ class _InicioState extends State<Inicio> {
             }
           });
 
-          _mostrarAlerta("Felicidades!", "Los productos de la aplicación ahora son los del excel.\n\nTotal productos cargados: ${productosDelExcel.length}");
+          _mostrarAlerta("Sincronización Finalizada", "El inventario ha sido actualizado correctamente.\n\nTotal productos cargados: ${productosDelExcel.length}");
         }
       }
     } catch (e) {
-      _mostrarAlerta("Error al Importar", e.toString());
+      _mostrarAlerta("Error al importar", e.toString());
     } finally {
       setState(() => _importando = false);
     }
@@ -309,8 +309,8 @@ class _InicioState extends State<Inicio> {
                 _buildMenuItem(Icons.point_of_sale, 'Venta', 'venta'),
                 _buildMenuItem(Icons.money_off, 'Fiado', 'deudas'),
                 _buildMenuItem(Icons.calendar_month, 'Calendario', 'calendario'), // Reemplaza a Historial y Ventas Hoy
-                _buildMenuItem(Icons.add_circle_outline, 'Añadir Pro', 'anadir'),
-                _buildMenuItem(Icons.warning_amber_rounded, 'Pa resurtir', 'agotados'),
+                _buildMenuItem(Icons.add_circle_outline, 'Añadir', 'anadir'),
+                _buildMenuItem(Icons.warning_amber_rounded, 'Agotados', 'agotados'),
                 _buildMenuItem(Icons.list_alt, 'Consultar', 'consultar'),
 
                 const Divider(color: Colors.grey),
@@ -334,7 +334,7 @@ class _InicioState extends State<Inicio> {
                   padding: EdgeInsets.only(left: 20, bottom: 20),
                   child: Align(
                     alignment: Alignment.centerLeft,
-                    child: Text("v2.0.1", style: TextStyle(color: Colors.white30, fontSize: 12, fontWeight: FontWeight.bold)),
+                    child: Text("v2.1.0", style: TextStyle(color: Colors.white30, fontSize: 12, fontWeight: FontWeight.bold)),
                   ),
                 )
               ],

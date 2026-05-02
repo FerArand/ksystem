@@ -114,7 +114,7 @@ class _NuevoIngresoState extends State<NuevoIngreso> {
       setState(() {
         _agregadosRecientemente.removeWhere((e) => e.id == p.id);
       });
-      _notificar("💥 KBoom (Incerte sonido de explosión) 💥.");
+      _notificar("Producto eliminado.");
     }
   }
 
@@ -187,7 +187,7 @@ class _NuevoIngresoState extends State<NuevoIngreso> {
             child: _cargando
                 ? const Center(child: CircularProgressIndicator())
                 : _agregadosRecientemente.isEmpty
-                ? const Center(child: Text("No ha llegado na", style: TextStyle(color: Colors.grey, fontSize: 18)))
+                ? const Center(child: Text("Sin registros recientes", style: TextStyle(color: Colors.grey, fontSize: 18)))
                 : ListView.builder(
               itemCount: _agregadosRecientemente.length,
               itemBuilder: (context, i) {
@@ -250,7 +250,7 @@ class _DialogoVincularState extends State<DialogoVincular> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text("K-es eso?"),
+      title: const Text("Producto no reconocido"),
       content: SizedBox(
         width: 500,
         height: 400,
@@ -262,7 +262,7 @@ class _DialogoVincularState extends State<DialogoVincular> {
               child: Row(children: [
                 const Icon(Icons.warning, color: Colors.orange),
                 const SizedBox(width: 10),
-                Expanded(child: Text("El código '${widget.codigoEscaneado}' no existe. Busca abajo para vincularlo o CREA uno nuevo."))
+                Expanded(child: Text("El código '${widget.codigoEscaneado}' no está registrado. Busque el producto para vincularlo o cree uno nuevo."))
               ]),
             ),
             const SizedBox(height: 10),
@@ -277,7 +277,7 @@ class _DialogoVincularState extends State<DialogoVincular> {
               child: _buscando
                   ? const Center(child: CircularProgressIndicator())
                   : _resultados.isEmpty
-                  ? const Center(child: Text("Búscale, sino pícale acá abajo en \"NUEVO\""))
+                  ? const Center(child: Text("Busque el producto o presione 'NUEVO'"))
                   : ListView.builder(
                 itemCount: _resultados.length,
                 itemBuilder: (ctx, i) {
@@ -299,8 +299,8 @@ class _DialogoVincularState extends State<DialogoVincular> {
         ),
       ),
       actions: [
-        TextButton(onPressed: widget.onCrearNuevo, child: const Text("Caray, ha de ser NUEVO")),
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancela")),
+        TextButton(onPressed: widget.onCrearNuevo, child: const Text("NUEVO")),
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancelar")),
       ],
     );
   }

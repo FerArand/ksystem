@@ -110,7 +110,7 @@ class _DeudasState extends State<Deudas> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text("EL DON DEBE:", style: TextStyle(fontWeight: FontWeight.bold)),
+                    const Text("TOTAL ADEUDADO:", style: TextStyle(fontWeight: FontWeight.bold)),
                     Text("\$${deudor['total_deuda'].toStringAsFixed(2)}",
                         style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.red)),
                   ],
@@ -190,7 +190,7 @@ class _DeudasState extends State<Deudas> {
                   );
                 }
               },
-              child: const Text("REGISTRAR PAGO 🤑🤙"),
+              child: const Text("REGISTRAR PAGO"),
             )
           ],
         )
@@ -224,7 +224,7 @@ class _DeudasState extends State<Deudas> {
             children: [
               const Icon(Icons.money_off, size: 28, color: Colors.red),
               const SizedBox(width: 10),
-              const Text("Crédito K-Fiado", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.red)),
+              const Text("Control de Deudas", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.red)),
               const SizedBox(width: 20),
               Expanded(
                 child: TextField(
@@ -283,7 +283,7 @@ class _DeudasState extends State<Deudas> {
                       const SizedBox(width: 20),
                       ElevatedButton.icon(
                         icon: const Icon(Icons.visibility, size: 18),
-                        label: const Text("A ver"),
+                        label: const Text("Detalles"),
                         onPressed: () => _verDetalle(d),
                         style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.white,

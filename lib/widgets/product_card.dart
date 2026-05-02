@@ -7,7 +7,7 @@ class ProductCard extends StatelessWidget {
   final VoidCallback? onEdit;
   final VoidCallback? onDelete;
   final Function(int)? onStockChange;
-  final bool alertStock; // Para cambiar el color a rojo en 'Agotados'
+  final bool alertStock;
 
   const ProductCard({
     Key? key,
@@ -21,97 +21,118 @@ class ProductCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Card(
-      elevation: 3,
-      margin: const EdgeInsets.symmetric(vertical: 6),
+      elevation: 2,
+      margin: const EdgeInsets.symmetric(vertical: 8),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Padding(
         padding: const EdgeInsets.all(12.0),
-        child: Column(
+        child: Row(
           children: [
-            // FILA 1: DATOS PRINCIPALES
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+            // Círculo con Inicial
+            CircleAvatar(
+              backgroundColor: alertStock ? Colors.red[100] : Colores.azulPrincipal.withValues(alpha: 0.1),
+              child: Text(
+                producto.descripcion.isNotEmpty ? producto.descripcion[0].toUpperCase() : '?',
+                style: TextStyle(
+                  color: alertStock ? Colors.red : Colores.azulPrincipal,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+            const SizedBox(width: 15),
+
+            // Información Central
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    producto.descripcion,
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
                     children: [
-                      Text(producto.descripcion, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                      const SizedBox(height: 4),
-                      Text("Código: ${producto.codigo} | SKU: ${producto.sku}", style: TextStyle(color: Colors.grey[700], fontSize: 12)),
-                      Text("Marca: ${producto.marca} | Factura: ${producto.factura}", style: TextStyle(color: Colors.grey[700], fontSize: 12)),
+                      _infoTag("SKU: ${producto.sku}", Colors.blueGrey),
+                      const SizedBox(width: 8),
+                      _infoTag("\$${producto.precio.toStringAsFixed(2)}", Colors.green),
                     ],
                   ),
-                ),
-                Column(
-                  children: [
-                    Text("\$${producto.precio.toStringAsFixed(2)}", style: const TextStyle(color: Colores.azulCielo, fontWeight: FontWeight.bold, fontSize: 20)),
-                    const Text("P. Público", style: TextStyle(fontSize: 10, color: Colors.grey)),
-                  ],
-                )
-              ],
+                ],
+              ),
             ),
-            const Divider(),
 
-            // FILA 2: CONTROLES Y ACCIONES
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                // BOTONES DE ACCIÓN (Editar / Eliminar)
-                Row(
+            // Control de Stock
+            if (onStockChange != null)
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.grey[100],
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    if (onEdit != null)
-                      IconButton(
-                        icon: const Icon(Icons.edit, color: Colors.orange),
-                        tooltip: "Editar",
-                        onPressed: onEdit,
+                    IconButton(
+                      icon: const Icon(Icons.remove_circle_outline, color: Colors.red),
+                      onPressed: () => onStockChange!(-1),
+                      visualDensity: VisualDensity.compact,
+                    ),
+                    Text(
+                      "${producto.stock}",
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 18,
+                        color: alertStock ? Colors.red : Colors.black,
                       ),
-                    if (onDelete != null)
-                      IconButton(
-                        icon: const Icon(Icons.delete, color: Colors.red),
-                        tooltip: "Eliminar",
-                        onPressed: onDelete,
-                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.add_circle_outline, color: Colors.green),
+                      onPressed: () => onStockChange!(1),
+                      visualDensity: VisualDensity.compact,
+                    ),
                   ],
                 ),
+              )
+            else
+              Text(
+                "Stock: ${producto.stock}",
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: alertStock ? Colors.red : Colors.black,
+                ),
+              ),
 
-                // CONTROL DE STOCK RÁPIDO
-                if (onStockChange != null)
-                  Container(
-                    decoration: BoxDecoration(
-                        color: alertStock ? Colors.red[50] : Colors.grey[100],
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: alertStock ? Colors.red.shade200 : Colors.grey.shade300)
-                    ),
-                    child: Row(
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.remove, color: Colors.red, size: 20),
-                          constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
-                          onPressed: () => onStockChange!(-1),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 8),
-                          child: Text(
-                              "${producto.stock}",
-                              style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 18,
-                                  color: alertStock ? Colors.red : Colors.black
-                              )
-                          ),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.add, color: Colors.green, size: 20),
-                          constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
-                          onPressed: () => onStockChange!(1),
-                        ),
-                      ],
-                    ),
-                  )
-              ],
-            )
+            const SizedBox(width: 10),
+
+            // Acciones
+            if (onEdit != null)
+              IconButton(
+                icon: const Icon(Icons.edit, color: Colors.orange),
+                onPressed: onEdit,
+              ),
+            if (onDelete != null)
+              IconButton(
+                icon: const Icon(Icons.delete_outline, color: Colors.red),
+                onPressed: onDelete,
+              ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _infoTag(String text, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.bold),
       ),
     );
   }

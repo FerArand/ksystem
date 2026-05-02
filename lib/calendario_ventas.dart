@@ -6,8 +6,8 @@ import 'constants/colores.dart';
 import 'Utils/impresion_ticket.dart';
 import 'models/producto.dart';
 import 'venta.dart';
+import 'factura_form.dart';
 import 'models/item_venta.dart' as modelo;
-//import 'widgets/product_card.dart';
 import 'databases/app_database.dart';
 
 class CalendarioVentas extends StatefulWidget {
@@ -19,7 +19,8 @@ class CalendarioVentas extends StatefulWidget {
 
 class _CalendarioVentasState extends State<CalendarioVentas> {
   DateTime _fechaActual = DateTime.now();
-  Map<int, Map<String, double>> _datosDias = {};
+  Map<String, Map<String, double>> _datosDias = {}; // Cambiado a String (YYYY-MM-DD)
+  int _totalDiasGrid = 35; // Por defecto 5 semanas
 
   // Datos estadísticos
   String _mejorProductoMes = "Calculando...";
@@ -38,37 +39,55 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
   Future<void> _cargarDatosMes(DateTime fecha) async {
     setState(() { _cargando = true; _datosDias.clear(); _topProductoNombre = "---"; });
 
-    // 1. OBTENER RESUMEN DIARIO
-    final ventas = await HistoryDB.instance.obtenerVentasPorMes(fecha.month, fecha.year);
+    // 1. CALCULAR RANGO DEL CALENDARIO (Para semanas completas)
+    int year = fecha.year;
+    int month = fecha.month;
+    DateTime primerDiaMes = DateTime(year, month, 1);
+    int offset = primerDiaMes.weekday == 7 ? 0 : primerDiaMes.weekday;
+    DateTime inicioCalendario = primerDiaMes.subtract(Duration(days: offset));
 
-    Map<int, Map<String, double>> temp = {};
+    // CALCULAR FILAS NECESARIAS (5 o 6 semanas)
+    int diasEnMes = DateTime(year, month + 1, 0).day;
+    int totalDiasNecesarios = offset + diasEnMes;
+    int calculoGrid = totalDiasNecesarios > 35 ? 42 : 35;
+
+    DateTime finCalendario = inicioCalendario.add(Duration(days: calculoGrid - 1));
+
+    String inicioStr = DateFormat('yyyy-MM-dd').format(inicioCalendario);
+    String finStr = DateFormat('yyyy-MM-dd').format(finCalendario);
+
+    // 2. OBTENER RESUMEN POR RANGO
+    final ventas = await HistoryDB.instance.obtenerVentasRango(inicioStr, finStr);
+
+    Map<String, Map<String, double>> temp = {};
     double maxVenta = 0;
-    int diaMejor = 0;
+    String diaMejor = "";
 
     for (var v in ventas) {
       String fechaStr = v['fecha_dia'];
-      int dia = int.parse(fechaStr.split('-')[2]);
       double total = v['total_venta'] ?? 0.0;
       double costo = v['total_costo'] ?? 0.0;
 
-      temp[dia] = {
+      temp[fechaStr] = {
         'venta': total,
         'costo': costo,
         'ganancia': total - costo
       };
 
-      if (total > maxVenta) {
-        maxVenta = total;
-        diaMejor = dia;
+      // El récord sigue siendo solo del mes actual para el "Día récord"
+      if (fechaStr.startsWith(DateFormat('yyyy-MM').format(fecha))) {
+        if (total > maxVenta) {
+          maxVenta = total;
+          diaMejor = fechaStr.split('-')[2];
+        }
       }
     }
 
-    // 2. OBTENER PRODUCTO TOP DEL MES
+    // 3. OBTENER PRODUCTO TOP DEL MES
     final db = await AppDatabase.instance.database;
     final mesStr = fecha.month.toString().padLeft(2, '0');
     final anioStr = fecha.year.toString();
 
-    // AQUÍ ESTÁ rawTickets (¡Esta era la línea que faltaba!)
     final rawTickets = await db.query('ventas_historial',
         columns: ['items'],
         where: "fecha LIKE ? AND es_activo = 1",
@@ -77,7 +96,6 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
     Map<String, int> conteoProductos = {};
     for (var t in rawTickets) {
       String itemsStr = t['items'] as String? ?? "";
-      // Usamos el parser mágico que lee JSON y formato viejo
       final listaItems = modelo.ItemVenta.listaDesdeString(itemsStr);
 
       for (var item in listaItems) {
@@ -89,7 +107,7 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
       }
     }
 
-    String nombreTop = "Kebrapose";
+    String nombreTop = "Sin datos";
     int cantTop = 0;
     if (conteoProductos.isNotEmpty) {
       var sortedKeys = conteoProductos.keys.toList(growable: false)
@@ -107,6 +125,7 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
       _topProductoNombre = nombreTop;
       _topProductoCant = cantTop;
       _fechaActual = fecha;
+      _totalDiasGrid = calculoGrid;
       _cargando = false;
     });
   }
@@ -148,31 +167,16 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
         return;
       }
 
+      final itemsReconstruidos = _reconstruirItems(ticketData);
       double total = (ticketData['total'] is int) ? (ticketData['total'] as int).toDouble() : ticketData['total'];
-      
-      // Intentar leer recibido y cambio guardados, si no existen (ventas viejas) usar lógica por defecto
       double recibido = ticketData['recibido'] != null 
           ? ((ticketData['recibido'] is int) ? (ticketData['recibido'] as int).toDouble() : ticketData['recibido']) 
           : total;
-          
       double cambio = ticketData['cambio'] != null
           ? ((ticketData['cambio'] is int) ? (ticketData['cambio'] as int).toDouble() : ticketData['cambio'])
           : 0.0;
-
       int folio = ticketData['folio_venta'] ?? ticketData['id'] ?? 0;
       String fechaOriginal = ticketData['fecha'] ?? "";
-      String itemsString = ticketData['items'] ?? "";
-      final itemsParseados = modelo.ItemVenta.listaDesdeString(itemsString);
-      List<ItemVenta> itemsReconstruidos = [];
-
-      for (var item in itemsParseados) {
-        Producto pDummy = Producto(
-            id: 0, codigo: "HIST", sku: item.sku, factura: "", descripcion: item.descripcion, marca: "",
-            stock: 0, costo: item.costo, precio: item.precio, precioRappi: 0, borrado: false
-        );
-        // Usamos el ItemVenta local de venta.dart para el ticket
-        itemsReconstruidos.add(ItemVenta(producto: pDummy, cantidad: item.cantidad));
-      }
 
       await ImpresionTicket.imprimirTicket(
           items: itemsReconstruidos,
@@ -187,6 +191,54 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
     }
   }
 
+  List<ItemVenta> _reconstruirItems(Map<String, dynamic> ticketData) {
+    String itemsString = ticketData['items'] ?? "";
+    final itemsParseados = modelo.ItemVenta.listaDesdeString(itemsString);
+    List<ItemVenta> itemsReconstruidos = [];
+
+    for (var item in itemsParseados) {
+      Producto pDummy = Producto(
+          id: 0, codigo: "HIST", sku: item.sku, factura: "", descripcion: item.descripcion, marca: "",
+          stock: 0, costo: item.costo, precio: item.precio, precioRappi: 0, borrado: false
+      );
+      itemsReconstruidos.add(ItemVenta(producto: pDummy, cantidad: item.cantidad));
+    }
+    return itemsReconstruidos;
+  }
+
+  Future<void> _abrirFacturaDesdeHistorial(Map<String, dynamic> ticketData) async {
+    try {
+      final itemsReconstruidos = _reconstruirItems(ticketData);
+      double total = (ticketData['total'] is int) ? (ticketData['total'] as int).toDouble() : ticketData['total'];
+      double recibido = ticketData['recibido'] != null 
+          ? ((ticketData['recibido'] is int) ? (ticketData['recibido'] as int).toDouble() : ticketData['recibido']) 
+          : total;
+      double cambio = ticketData['cambio'] != null
+          ? ((ticketData['cambio'] is int) ? (ticketData['cambio'] as int).toDouble() : ticketData['cambio'])
+          : 0.0;
+      int folio = ticketData['folio_venta'] ?? ticketData['id'] ?? 0;
+      String fechaOriginal = ticketData['fecha'] ?? "";
+
+      final pdfBytes = await ImpresionTicket.generarPdfTicket(
+          items: itemsReconstruidos,
+          total: total,
+          recibido: recibido,
+          cambio: cambio,
+          folioVenta: folio,
+          fechaOriginal: fechaOriginal
+      );
+
+      if (!mounted) return;
+
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => FacturaForm(ventaId: folio, ticketPdf: pdfBytes)),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error al generar factura: $e")));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -198,8 +250,13 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
           child: Row(
             children: [
               IconButton(icon: const Icon(Icons.arrow_back_ios, color: Colors.blue), onPressed: () => _cambiarMes(-1)),
-              Text(DateFormat('MMMM yyyy', 'es_MX').format(_fechaActual).toUpperCase(),
-                  style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colores.azulPrincipal)),
+              SizedBox(
+                width: 320,
+                child: Center(
+                  child: Text(DateFormat('MMMM yyyy', 'es_MX').format(_fechaActual).toUpperCase(),
+                      style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colores.azulPrincipal)),
+                ),
+              ),
               IconButton(icon: const Icon(Icons.arrow_forward_ios, color: Colors.blue), onPressed: () => _cambiarMes(1)),
               const SizedBox(width: 20),
 
@@ -217,6 +274,16 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
                 ),
                 onPressed: _mostrarBuscadorFolio,
               ),
+              const SizedBox(width: 10),
+              ElevatedButton.icon(
+                icon: const Icon(Icons.analytics),
+                label: const Text("Resumen del mes", style: TextStyle(fontWeight: FontWeight.bold)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colores.azulPrincipal,
+                  foregroundColor: Colors.white,
+                ),
+                onPressed: _mostrarResumenMensual,
+              ),
 
               // SECCIÓN PRODUCTO DEL MES
               Expanded(
@@ -225,11 +292,11 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      const Text("Guau,", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1.2)),
+                      const Text("Producto del mes:", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1.2)),
                       Text(_topProductoNombre,
                           maxLines: 1, overflow: TextOverflow.ellipsis,
                           style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.blueGrey[800])),
-                      Text("No te hará quebrar con sus $_topProductoCant unidades vendidas!", style: const TextStyle(fontSize: 11, color: Colors.blue)),
+                      Text("Se han vendido $_topProductoCant unidades de este producto.", style: const TextStyle(fontSize: 11, color: Colors.blue)),
                     ],
                   ),
                 ),
@@ -278,32 +345,26 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
   Widget _buildCalendarioGrid() {
     int year = _fechaActual.year;
     int month = _fechaActual.month;
-    int daysInMonth = DateTime(year, month + 1, 0).day;
-    int firstWeekday = DateTime(year, month, 1).weekday;
-    int offset = firstWeekday == 7 ? 0 : firstWeekday;
+    DateTime primerDiaMes = DateTime(year, month, 1);
+    int offset = primerDiaMes.weekday == 7 ? 0 : primerDiaMes.weekday;
+    DateTime fechaInicio = primerDiaMes.subtract(Duration(days: offset));
 
     List<Widget> filas = [];
     List<Widget> celdasFila = [];
-
-    for (int i = 0; i < offset; i++) {
-      celdasFila.add(Expanded(child: Container(decoration: BoxDecoration(border: Border.all(color: Colors.grey[100]!)))));
-    }
-
     double semVenta = 0, semGan = 0;
 
-    for (int dia = 1; dia <= daysInMonth; dia++) {
-      double v = _datosDias[dia]?['venta'] ?? 0;
-      double g = _datosDias[dia]?['ganancia'] ?? 0;
+    for (int i = 0; i < _totalDiasGrid; i++) {
+      DateTime diaActual = fechaInicio.add(Duration(days: i));
+      String ymd = DateFormat('yyyy-MM-dd').format(diaActual);
+      
+      double v = _datosDias[ymd]?['venta'] ?? 0;
+      double g = _datosDias[ymd]?['ganancia'] ?? 0;
       semVenta += v; semGan += g;
 
-      celdasFila.add(Expanded(child: _buildCeldaDia(dia, v, g)));
+      celdasFila.add(Expanded(child: _buildCeldaDia(diaActual, v, g)));
 
-      if ((dia + offset) % 7 == 0 || dia == daysInMonth) {
-        while (celdasFila.length < 7) {
-          celdasFila.add(Expanded(child: Container(decoration: BoxDecoration(border: Border.all(color: Colors.grey[100]!)))));
-        }
-
-        // --- CELDA TOTAL SEMANAL (Estilo Clásico Azul + Números Grandes) ---
+      if ((i + 1) % 7 == 0) {
+        // --- CELDA TOTAL SEMANAL ---
         celdasFila.add(Expanded(
           flex: 2,
           child: Container(
@@ -315,7 +376,7 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Text("Resumen de la SEMANA", style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.blueGrey)),
+                const Text("Total SEMANA", style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.blueGrey)),
                 Text("\$${semVenta.toStringAsFixed(0)}",
                     style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: Colors.blue)),
                 Text("G: \$${semGan.toStringAsFixed(0)}",
@@ -331,10 +392,10 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
     return Column(children: filas);
   }
 
-  Widget _buildCeldaDia(int dia, double venta, double ganancia) {
-    bool esHoy = dia == DateTime.now().day && _fechaActual.month == DateTime.now().month && _fechaActual.year == DateTime.now().year;
+  Widget _buildCeldaDia(DateTime fecha, double venta, double ganancia) {
+    bool esMesActual = fecha.month == _fechaActual.month;
+    bool esHoy = fecha.day == DateTime.now().day && fecha.month == DateTime.now().month && fecha.year == DateTime.now().year;
 
-    // Decoración simple: Blanco con borde sutil si hay ventas, o sin borde si no
     BoxDecoration decoration;
     if (esHoy) {
       decoration = BoxDecoration(
@@ -344,57 +405,57 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
       );
     } else if (venta > 0) {
       decoration = BoxDecoration(
-          color: Colors.white,
+          color: esMesActual ? Colors.white : Colors.grey[50],
           borderRadius: BorderRadius.circular(4),
-          border: Border.all(color: Colors.grey.shade300)
+          border: Border.all(color: esMesActual ? Colors.grey.shade300 : Colors.grey.shade200)
       );
     } else {
       decoration = BoxDecoration(
-          color: Colors.white,
+          color: esMesActual ? Colors.white : Colors.grey[50],
           borderRadius: BorderRadius.circular(4),
-          border: Border.all(color: Colors.grey.shade100)
+          border: Border.all(color: esMesActual ? Colors.grey.shade100 : Colors.transparent)
       );
     }
 
-    return Container(
-      margin: const EdgeInsets.all(2),
-      decoration: decoration,
-      child: InkWell(
-        onTap: () => _abrirDetalleDia(dia),
-        child: Padding(
-          padding: const EdgeInsets.all(4.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // NÚMERO DE DÍA (Pequeño)
-              Text(
-                  dia.toString(),
-                  style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14,
-                      color: esHoy ? Colors.orange[900] : Colors.grey[700]
-                  )
-              ),
-              if (venta > 0) ...[
-                const Spacer(),
-                // VENTAS (Grande)
-                Center(child: Text("\$${venta.toStringAsFixed(0)}",
-                    style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: Colors.black87))),
-                // GANANCIAS (Mediano)
-                Center(child: Text("+\$${ganancia.toStringAsFixed(0)}",
-                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.green[800]))),
-                const Spacer(),
-                const Align(alignment: Alignment.center, child: Icon(Icons.visibility, size: 14, color: Colors.blueGrey))
-              ]
-            ],
+    return Opacity(
+      opacity: esMesActual ? 1.0 : 0.4,
+      child: Container(
+        margin: const EdgeInsets.all(2),
+        decoration: decoration,
+        child: InkWell(
+          onTap: () => _abrirDetalleDia(fecha),
+          child: Padding(
+            padding: const EdgeInsets.all(4.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                    fecha.day.toString(),
+                    style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                        color: esHoy ? Colors.orange[900] : (esMesActual ? Colors.grey[700] : Colors.grey[400])
+                    )
+                ),
+                if (venta > 0) ...[
+                  const Spacer(),
+                  Center(child: Text("\$${venta.toStringAsFixed(0)}",
+                      style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: Colors.black87))),
+                  Center(child: Text("+\$${ganancia.toStringAsFixed(0)}",
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.green[800]))),
+                  const Spacer(),
+                  const Align(alignment: Alignment.center, child: Icon(Icons.visibility, size: 14, color: Colors.blueGrey))
+                ]
+              ],
+            ),
           ),
         ),
       ),
     );
   }
 
-  void _abrirDetalleDia(int dia, {int initialTab = 0}) async {
-    String fechaYmd = "${_fechaActual.year}-${_fechaActual.month.toString().padLeft(2,'0')}-${dia.toString().padLeft(2,'0')}";
+  void _abrirDetalleDia(DateTime fecha, {int initialTab = 0}) async {
+    String fechaYmd = DateFormat('yyyy-MM-dd').format(fecha);
     List<Map<String, dynamic>> tickets = await HistoryDB.instance.obtenerVentasPorDia(fechaYmd);
 
     double tVenta = 0, tCosto = 0;
@@ -419,7 +480,7 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text("Desglose del $dia de ${DateFormat('MMMM').format(_fechaActual)}", style: const TextStyle(color: Colors.white, fontSize: 20)),
+                      Text("Desglose del ${DateFormat('dd MMMM yyyy').format(fecha)}", style: const TextStyle(color: Colors.white, fontSize: 20)),
                       IconButton(icon: const Icon(Icons.close, color: Colors.white), onPressed: () => Navigator.pop(ctx))
                     ],
                   ),
@@ -453,7 +514,69 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
                       _infoBox("LIQUIDEZ", tVenta, Colors.black),
                       const SizedBox(width: 30),
                       const VerticalDivider(),
-                      _infoBox("PA LOS CHETOS 🤑", tVenta - tCosto, Colors.green),
+                      _infoBox("GANANCIA", tVenta - tCosto, Colors.green),
+                    ],
+                  ),
+                )
+              ],
+            ),
+          ),
+        )
+    );
+  }
+
+  void _mostrarResumenMensual() async {
+    setState(() => _cargando = true);
+    final db = await AppDatabase.instance.database;
+    final mesStr = _fechaActual.month.toString().padLeft(2, '0');
+    final anioStr = _fechaActual.year.toString();
+
+    final tickets = await db.query('ventas_historial',
+        where: "fecha LIKE ? AND es_activo = 1",
+        whereArgs: ['$anioStr-$mesStr%'],
+        orderBy: 'fecha DESC');
+
+    double tVenta = 0, tCosto = 0;
+    for (var t in tickets) {
+      tVenta += (t['total'] as num).toDouble();
+      tCosto += (t['costo_total'] as num).toDouble();
+    }
+
+    setState(() => _cargando = false);
+    if (!mounted) return;
+
+    showDialog(
+        context: context,
+        builder: (ctx) => Dialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          child: SizedBox(
+            width: 1000, height: 800,
+            child: Column(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: const BoxDecoration(color: Colores.azulPrincipal, borderRadius: BorderRadius.vertical(top: Radius.circular(10))),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text("Resumen Consolidado - ${DateFormat('MMMM yyyy').format(_fechaActual).toUpperCase()}", style: const TextStyle(color: Colors.white, fontSize: 20)),
+                      IconButton(icon: const Icon(Icons.close, color: Colors.white), onPressed: () => Navigator.pop(ctx))
+                    ],
+                  ),
+                ),
+                Expanded(child: _buildResumenProductos(tickets)),
+                Container(
+                  padding: const EdgeInsets.all(20),
+                  color: Colors.grey[100],
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      _infoBox("COSTO TOTAL", tCosto, Colors.red),
+                      const SizedBox(width: 30),
+                      _infoBox("VENTA TOTAL", tVenta, Colors.black),
+                      const SizedBox(width: 30),
+                      const VerticalDivider(),
+                      _infoBox("GANANCIA TOTAL", tVenta - tCosto, Colors.green),
                     ],
                   ),
                 )
@@ -482,10 +605,10 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
           onSubmitted: (v) => _ejecutarBusquedaFolio(v, ctx),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Siempre no")),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancelar")),
           ElevatedButton(
             onPressed: () => _ejecutarBusquedaFolio(folioCtrl.text, ctx),
-            child: const Text("Vamos!"),
+            child: const Text("Buscar"),
           ),
         ],
       ),
@@ -502,7 +625,7 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
 
     if (venta == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("No hayé na, Pa"), backgroundColor: Colors.red),
+        const SnackBar(content: Text("Folio no encontrado"), backgroundColor: Colors.red),
       );
       return;
     }
@@ -521,7 +644,7 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
     }
 
     // 2. Abrir detalle del día en la pestaña de tickets (index 1)
-    _abrirDetalleDia(fechaVenta.day, initialTab: 1);
+    _abrirDetalleDia(fechaVenta, initialTab: 1);
   }
 
   Widget _infoBox(String titulo, double valor, Color color) {
@@ -536,7 +659,7 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
 
   // --- BITÁCORA DE TICKETS ---
   Widget _buildListaTickets(List<Map<String, dynamic>> tickets) {
-    if (tickets.isEmpty) return const Center(child: Text("Quebramos ya"));
+    if (tickets.isEmpty) return const Center(child: Text("No hay ventas registradas"));
     return ListView.separated(
       padding: const EdgeInsets.all(20),
       separatorBuilder: (c, i) => const Divider(),
@@ -591,6 +714,11 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
             mainAxisSize: MainAxisSize.min,
             children: [
               Text("\$${t['total'].toStringAsFixed(2)}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              IconButton(
+                icon: const Icon(Icons.description, color: Colores.azulPrincipal), 
+                tooltip: "Facturar",
+                onPressed: () => _abrirFacturaDesdeHistorial(t),
+              ),
               IconButton(icon: const Icon(Icons.print), onPressed: () => _reimprimir(t))
             ],
           ),
@@ -601,7 +729,7 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
 
   // --- RESUMEN DE PRODUCTOS ---
   Widget _buildResumenProductos(List<Map<String, dynamic>> tickets) {
-    if (tickets.isEmpty) return const Center(child: Text("Kebrapose"));
+    if (tickets.isEmpty) return const Center(child: Text("Sin datos"));
 
     Map<String, dynamic> consolidado = {};
     Map<String, dynamic> abonos = {};

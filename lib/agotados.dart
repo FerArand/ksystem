@@ -56,14 +56,14 @@ class _AgotadosState extends State<Agotados> {
       children: [
         const Padding(
           padding: EdgeInsets.all(16.0),
-          child: Text("Productos Agotados (pa resurtir)",
+          child: Text("Productos Agotados",
               style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.red)),
         ),
         Expanded(
           child: _cargando
               ? const Center(child: CircularProgressIndicator())
               : _listaAgotados.isEmpty
-              ? const Center(child: Text("Felicidades! No se ha terminado nada.", style: TextStyle(fontSize: 18)))
+              ? const Center(child: Text("No hay productos agotados", style: TextStyle(fontSize: 18)))
               : ListView.builder(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             itemCount: _listaAgotados.length,
