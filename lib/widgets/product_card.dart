@@ -30,7 +30,7 @@ class ProductCard extends StatelessWidget {
           children: [
             // Círculo con Inicial
             CircleAvatar(
-              backgroundColor: alertStock ? Colors.red[100] : Colores.azulPrincipal.withValues(alpha: 0.1),
+              backgroundColor: alertStock ? Colors.red[100] : Colores.azulPrincipal.withOpacity(0.1),
               child: Text(
                 producto.descripcion.isNotEmpty ? producto.descripcion[0].toUpperCase() : '?',
                 style: TextStyle(
@@ -49,14 +49,15 @@ class ProductCard extends StatelessWidget {
                   Text(
                     producto.descripcion,
                     style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                    maxLines: 1,
+                    maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: 4),
-                  Row(
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 4,
                     children: [
                       _infoTag("SKU: ${producto.sku}", Colors.blueGrey),
-                      const SizedBox(width: 8),
                       _infoTag("\$${producto.precio.toStringAsFixed(2)}", Colors.green),
                     ],
                   ),
@@ -77,7 +78,8 @@ class ProductCard extends StatelessWidget {
                     IconButton(
                       icon: const Icon(Icons.remove_circle_outline, color: Colors.red),
                       onPressed: () => onStockChange!(-1),
-                      visualDensity: VisualDensity.compact,
+                      constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                      padding: EdgeInsets.zero,
                     ),
                     Text(
                       "${producto.stock}",
@@ -90,7 +92,8 @@ class ProductCard extends StatelessWidget {
                     IconButton(
                       icon: const Icon(Icons.add_circle_outline, color: Colors.green),
                       onPressed: () => onStockChange!(1),
-                      visualDensity: VisualDensity.compact,
+                      constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                      padding: EdgeInsets.zero,
                     ),
                   ],
                 ),
@@ -127,7 +130,7 @@ class ProductCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
+        color: color.withOpacity(0.1),
         borderRadius: BorderRadius.circular(4),
       ),
       child: Text(

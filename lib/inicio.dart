@@ -280,87 +280,112 @@ class _InicioState extends State<Inicio> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: Row(
-        children: [
-          // --- BARRA LATERAL (Restaurada al estilo original) ---
-          Container(
-            width: 230,
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  Colores.grisOscuro,
-                  Color(0xFF0D1B2A), // Azul muy oscuro (Navy)
-                ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        bool isDesktop = constraints.maxWidth >= 900;
+
+        return Scaffold(
+          appBar: isDesktop
+              ? null
+              : AppBar(
+                  backgroundColor: Colores.grisOscuro,
+                  iconTheme: const IconThemeData(color: Colors.white),
+                  title: const Text('KTOOLS', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, letterSpacing: 2)),
+                ),
+          drawer: isDesktop ? null : _buildSidebar(isDrawer: true),
+          body: Row(
+            children: [
+              if (isDesktop) _buildSidebar(isDrawer: false),
+              // CONTENIDO PRINCIPAL
+              Expanded(
+                child: Container(
+                  color: Colors.grey[100],
+                  child: _contenido(),
+                ),
               ),
-            ),
-            child: Column(
-              children: [
-                const SizedBox(height: 30),
-                // Logo textual (Sin "tiendita", estilo original)
-                const Text('KTOOLS', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold, letterSpacing: 2)),
-                const Text('Local System', style: TextStyle(color: Colors.grey, fontSize: 12)),
-                const Text('By: Ferplace', style: TextStyle(color: Colors.grey, fontSize: 8)),
-                const SizedBox(height: 40),
+            ],
+          ),
+        );
+      },
+    );
+  }
 
-                // MENÚ PRINCIPAL
-                _buildMenuItem(Icons.point_of_sale, 'Venta', 'venta'),
-                _buildMenuItem(Icons.money_off, 'Fiado', 'deudas'),
-                _buildMenuItem(Icons.calendar_month, 'Calendario', 'calendario'), // Reemplaza a Historial y Ventas Hoy
-                _buildMenuItem(Icons.add_circle_outline, 'Añadir', 'anadir'),
-                _buildMenuItem(Icons.warning_amber_rounded, 'Agotados', 'agotados'),
-                _buildMenuItem(Icons.list_alt, 'Consultar', 'consultar'),
+  Widget _buildSidebar({required bool isDrawer}) {
+    return Container(
+      width: 230,
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Colores.grisOscuro,
+            Color(0xFF0D1B2A), // Azul muy oscuro (Navy)
+          ],
+        ),
+      ),
+      child: Column(
+        children: [
+          const SizedBox(height: 30),
+          // Logo textual (Sin "tiendita", estilo original)
+          const Text('KTOOLS', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold, letterSpacing: 2)),
+          const Text('Local System', style: TextStyle(color: Colors.grey, fontSize: 12)),
+          const Text('By: Ferplace', style: TextStyle(color: Colors.grey, fontSize: 8)),
+          const SizedBox(height: 40),
 
-                const Divider(color: Colors.grey),
+          // MENÚ PRINCIPAL
+          _buildMenuItem(Icons.point_of_sale, 'Venta', 'venta', isDrawer),
+          _buildMenuItem(Icons.money_off, 'Fiado', 'deudas', isDrawer),
+          _buildMenuItem(Icons.calendar_month, 'Calendario', 'calendario', isDrawer), // Reemplaza a Historial y Ventas Hoy
+          _buildMenuItem(Icons.add_circle_outline, 'Añadir', 'anadir', isDrawer),
+          _buildMenuItem(Icons.warning_amber_rounded, 'Agotados', 'agotados', isDrawer),
+          _buildMenuItem(Icons.list_alt, 'Consultar', 'consultar', isDrawer),
 
-                // EXCEL (RESTAURADO)
-                ListTile(
-                  leading: const Icon(Icons.upload_file, color: Colors.white70),
-                  title: const Text('Importar Excel', style: TextStyle(color: Colors.white70, fontSize: 14)),
-                  onTap: _importarExcel,
-                ),
-                ListTile(
-                  leading: const Icon(Icons.download, color: Colors.white70),
-                  title: const Text('Exportar Excel', style: TextStyle(color: Colors.white70, fontSize: 14)),
-                  onTap: _exportarExcel,
-                ),
+          const Divider(color: Colors.grey),
 
-                const Spacer(),
-
-                // --- VERSIÓN SOLICITADA ---
-                const Padding(
-                  padding: EdgeInsets.only(left: 20, bottom: 20),
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text("v2.1.0", style: TextStyle(color: Colors.white30, fontSize: 12, fontWeight: FontWeight.bold)),
-                  ),
-                )
-              ],
-            ),
+          // EXCEL (RESTAURADO)
+          ListTile(
+            leading: const Icon(Icons.upload_file, color: Colors.white70),
+            title: const Text('Importar Excel', style: TextStyle(color: Colors.white70, fontSize: 14)),
+            onTap: () {
+              if (isDrawer) Navigator.pop(context);
+              _importarExcel();
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.download, color: Colors.white70),
+            title: const Text('Exportar Excel', style: TextStyle(color: Colors.white70, fontSize: 14)),
+            onTap: () {
+              if (isDrawer) Navigator.pop(context);
+              _exportarExcel();
+            },
           ),
 
-          // CONTENIDO PRINCIPAL
-          Expanded(
-            child: Container(
-              color: Colors.grey[100],
-              child: _contenido(),
+          const Spacer(),
+
+          // --- VERSIÓN SOLICITADA ---
+          const Padding(
+            padding: EdgeInsets.only(left: 20, bottom: 20),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text("v2.1.1", style: TextStyle(color: Colors.white30, fontSize: 12, fontWeight: FontWeight.bold)),
             ),
-          ),
+          )
         ],
       ),
     );
   }
 
-  Widget _buildMenuItem(IconData icon, String title, String seccion) {
+  Widget _buildMenuItem(IconData icon, String title, String seccion, bool isDrawer) {
     bool isSelected = _seccionActual == seccion;
     return Container(
       color: isSelected ? Colors.white.withValues(alpha: 0.1) : null,
       child: ListTile(
         leading: Icon(icon, color: isSelected ? Colores.azulCielo : Colors.white),
         title: Text(title, style: TextStyle(color: isSelected ? Colores.azulCielo : Colors.white, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal)),
-        onTap: () => setState(() => _seccionActual = seccion),
+        onTap: () {
+          setState(() => _seccionActual = seccion);
+          if (isDrawer) Navigator.pop(context);
+        },
       ),
     );
   }

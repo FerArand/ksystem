@@ -1,4 +1,3 @@
-
 import 'package:intl/intl.dart';
 
 import 'db_helper.dart';
@@ -285,7 +284,7 @@ class _VentaState extends State<Venta> {
     }
 
     if (!mounted) return;
-    
+
     // GENERAR PDF PARA EL FORMULARIO (Si elige facturar)
     final ticketPdf = await ImpresionTicket.generarPdfTicket(
         items: _carrito,
@@ -356,12 +355,19 @@ class _VentaState extends State<Venta> {
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: Colors.blue.shade200),
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
+      child: Wrap(
+        crossAxisAlignment: WrapCrossAlignment.center,
+        spacing: 10,
+        runSpacing: 10,
         children: [
-          const Icon(Icons.calculate, color: Colors.blue, size: 28),
-          const SizedBox(width: 10),
-          const Text("Si ", style: TextStyle(fontSize: 16)),
+          const Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.calculate, color: Colors.blue, size: 28),
+              SizedBox(width: 10),
+              Text("Si ", style: TextStyle(fontSize: 16)),
+            ],
+          ),
 
           SizedBox(
             width: 80,
@@ -418,7 +424,6 @@ class _VentaState extends State<Venta> {
             ),
           ),
 
-          const Spacer(),
           IconButton(
             icon: const Icon(Icons.refresh, color: Colors.grey),
             tooltip: "Limpiar",

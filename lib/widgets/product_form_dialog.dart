@@ -110,33 +110,73 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
                 const SizedBox(height: 10),
                 TextFormField(controller: marcaController, decoration: decoracion("Marca", obligatorio: true), validator: validar),
                 const SizedBox(height: 10),
-                Row(children: [
-                  Expanded(child: TextFormField(
-                      controller: costoController, focusNode: costoFocus,
-                      decoration: decoracion("Costo", obligatorio: true, suffix: "\$"), keyboardType: TextInputType.number, validator: validar
-                  )),
-                  const SizedBox(width: 10),
-                  Expanded(child: TextFormField(
-                      controller: gananciaController, focusNode: gananciaFocus,
-                      decoration: decoracion("Margen", obligatorio: true, suffix: "%"), keyboardType: TextInputType.number, validator: validar
-                  )),
-                  const SizedBox(width: 10),
-                  Expanded(child: TextFormField(
-                    controller: precioController, focusNode: precioFocus,
-                    decoration: InputDecoration(
-                        labelText: "Precio Público", filled: true, fillColor: Colors.blue[50],
-                        border: const OutlineInputBorder(), suffixText: "\$",
-                        labelStyle: const TextStyle(color: Colores.azulPrincipal, fontWeight: FontWeight.bold)
-                    ),
-                    keyboardType: TextInputType.number, validator: validar,
-                  )),
-                ]),
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    if (constraints.maxWidth > 450) {
+                      return Row(children: [
+                        Expanded(child: TextFormField(
+                            controller: costoController, focusNode: costoFocus,
+                            decoration: decoracion("Costo", obligatorio: true, suffix: "\$"), keyboardType: TextInputType.number, validator: validar
+                        )),
+                        const SizedBox(width: 10),
+                        Expanded(child: TextFormField(
+                            controller: gananciaController, focusNode: gananciaFocus,
+                            decoration: decoracion("Margen", obligatorio: true, suffix: "%"), keyboardType: TextInputType.number, validator: validar
+                        )),
+                        const SizedBox(width: 10),
+                        Expanded(child: TextFormField(
+                          controller: precioController, focusNode: precioFocus,
+                          decoration: InputDecoration(
+                              labelText: "Precio Público", filled: true, fillColor: Colors.blue[50],
+                              border: const OutlineInputBorder(), suffixText: "\$",
+                              labelStyle: const TextStyle(color: Colores.azulPrincipal, fontWeight: FontWeight.bold)
+                          ),
+                          keyboardType: TextInputType.number, validator: validar,
+                        )),
+                      ]);
+                    } else {
+                      return Column(children: [
+                        TextFormField(
+                            controller: costoController, focusNode: costoFocus,
+                            decoration: decoracion("Costo", obligatorio: true, suffix: "\$"), keyboardType: TextInputType.number, validator: validar
+                        ),
+                        const SizedBox(height: 10),
+                        TextFormField(
+                            controller: gananciaController, focusNode: gananciaFocus,
+                            decoration: decoracion("Margen", obligatorio: true, suffix: "%"), keyboardType: TextInputType.number, validator: validar
+                        ),
+                        const SizedBox(height: 10),
+                        TextFormField(
+                          controller: precioController, focusNode: precioFocus,
+                          decoration: InputDecoration(
+                              labelText: "Precio Público", filled: true, fillColor: Colors.blue[50],
+                              border: const OutlineInputBorder(), suffixText: "\$",
+                              labelStyle: const TextStyle(color: Colores.azulPrincipal, fontWeight: FontWeight.bold)
+                          ),
+                          keyboardType: TextInputType.number, validator: validar,
+                        ),
+                      ]);
+                    }
+                  }
+                ),
                 const SizedBox(height: 10),
-                Row(children: [
-                  Expanded(child: TextFormField(controller: skuController, decoration: decoracion("SKU (Opcional)"))),
-                  const SizedBox(width: 10),
-                  Expanded(child: TextFormField(controller: facturaController, decoration: decoracion("Factura (Opcional)"))),
-                ]),
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    if (constraints.maxWidth > 400) {
+                      return Row(children: [
+                        Expanded(child: TextFormField(controller: skuController, decoration: decoracion("SKU (Opcional)"))),
+                        const SizedBox(width: 10),
+                        Expanded(child: TextFormField(controller: facturaController, decoration: decoracion("Factura (Opcional)"))),
+                      ]);
+                    } else {
+                      return Column(children: [
+                        TextFormField(controller: skuController, decoration: decoracion("SKU (Opcional)")),
+                        const SizedBox(height: 10),
+                        TextFormField(controller: facturaController, decoration: decoracion("Factura (Opcional)")),
+                      ]);
+                    }
+                  }
+                ),
                 const SizedBox(height: 10),
                 TextFormField(controller: cantidadController, decoration: decoracion("Inventario"), keyboardType: TextInputType.number),
               ],
