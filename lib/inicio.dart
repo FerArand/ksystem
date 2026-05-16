@@ -1,7 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:excel/excel.dart';
+import 'package:excel/excel.dart' hide Border;
 import 'package:path_provider/path_provider.dart';
 import 'agotados.dart';
 
@@ -13,6 +13,7 @@ import 'productos.dart';
 import 'nuevo_ingreso.dart';
 import 'deudas.dart'; // Módulo de Deudas
 import 'calendario_ventas.dart'; // Módulo Unificado de Calendario
+import 'pedidos.dart';
 
 class Inicio extends StatefulWidget {
   const Inicio({Key? key}) : super(key: key);
@@ -39,7 +40,7 @@ class _InicioState extends State<Inicio> {
       String sheetProd = 'Inventario';
       excel.rename(excel.getDefaultSheet()!, sheetProd);
       Sheet sProd = excel[sheetProd];
-      List<String> hProd = ['Código', 'Stock', 'Factura', 'SKU', 'Marca', 'Descripción', 'Costo', 'Precio', 'PrecioRappi'];
+      List<String> hProd = ['Código', 'Stock', 'Ubicación', 'SKU', 'Marca', 'Descripción', 'Costo', 'Precio', 'PrecioRappi'];
       sProd.appendRow(hProd.map((e) => TextCellValue(e)).toList());
 
       final List<Map<String, dynamic>> mapsProd = await db.query('productos', where: 'borrado = 0');
@@ -47,7 +48,7 @@ class _InicioState extends State<Inicio> {
         sProd.appendRow([
           TextCellValue(p['codigo'].toString()),
           IntCellValue(p['stock'] ?? 0),
-          TextCellValue(p['factura'] ?? ''),
+          TextCellValue(p['ubicacion'] ?? ''),
           TextCellValue(p['sku'] ?? ''),
           TextCellValue(p['marca'] ?? ''),
           TextCellValue(p['descripcion'] ?? ''),
@@ -171,7 +172,7 @@ class _InicioState extends State<Inicio> {
 
             String codigo = str(val(row, 0));
             int stock = int.tryParse(str(val(row, 1))) ?? 0;
-            String factura = str(val(row, 2));
+            String ubicacion = str(val(row, 2));
             String sku = str(val(row, 3));
             String marca = str(val(row, 4));
             String descripcion = str(val(row, 5));
@@ -184,7 +185,8 @@ class _InicioState extends State<Inicio> {
             productosDelExcel.add(Producto(
                 codigo: codigo,
                 sku: sku,
-                factura: factura,
+                factura: "",
+                ubicacion: ubicacion,
                 marca: marca,
                 descripcion: descripcion,
                 costo: costo,
@@ -199,7 +201,7 @@ class _InicioState extends State<Inicio> {
           bool confirmar = false;
           await showDialog(
             context: context,
-            barrierDismissible: false,
+            barrierDismissible: true,
             builder: (ctx) => AlertDialog(
               title: const Text("ADVERTENCIA: SINCRONIZACIÓN DE INVENTARIO"),
               content: Text(
@@ -271,6 +273,7 @@ class _InicioState extends State<Inicio> {
       case 'venta': return const Venta();
       case 'deudas': return const Deudas(); // Nuevo Módulo Deudas
       case 'calendario': return const CalendarioVentas(); // Nuevo Módulo Calendario
+      case 'pedidos': return const Pedidos();
       case 'anadir': return const NuevoIngreso();
       case 'agotados': return const Agotados();
       case 'consultar': return const Productos();
@@ -334,6 +337,7 @@ class _InicioState extends State<Inicio> {
 
           // MENÚ PRINCIPAL
           _buildMenuItem(Icons.point_of_sale, 'Venta', 'venta', isDrawer),
+          _buildMenuItem(Icons.shopping_bag, 'Pedidos', 'pedidos', isDrawer),
           _buildMenuItem(Icons.money_off, 'Fiado', 'deudas', isDrawer),
           _buildMenuItem(Icons.calendar_month, 'Calendario', 'calendario', isDrawer), // Reemplaza a Historial y Ventas Hoy
           _buildMenuItem(Icons.add_circle_outline, 'Añadir', 'anadir', isDrawer),
@@ -367,7 +371,7 @@ class _InicioState extends State<Inicio> {
             padding: EdgeInsets.only(left: 20, bottom: 20),
             child: Align(
               alignment: Alignment.centerLeft,
-              child: Text("v2.1.1", style: TextStyle(color: Colors.white30, fontSize: 12, fontWeight: FontWeight.bold)),
+              child: Text("v2.2.0", style: TextStyle(color: Colors.white30, fontSize: 12, fontWeight: FontWeight.bold)),
             ),
           )
         ],
@@ -377,11 +381,46 @@ class _InicioState extends State<Inicio> {
 
   Widget _buildMenuItem(IconData icon, String title, String seccion, bool isDrawer) {
     bool isSelected = _seccionActual == seccion;
+
+    BoxDecoration? decoration;
+    EdgeInsets margin = const EdgeInsets.symmetric(horizontal: 12, vertical: 4);
+
+    if (isSelected) {
+      decoration = BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(10),
+      );
+    } else if (seccion == 'venta') {
+      decoration = BoxDecoration(
+        color: Colors.green.withValues(alpha: 0.2),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.green.withValues(alpha: 0.4), width: 1),
+      );
+    } else if (seccion == 'pedidos') {
+      decoration = BoxDecoration(
+        color: Colors.orange.withValues(alpha: 0.2),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.orange.withValues(alpha: 0.4), width: 1),
+      );
+    } else if (seccion == 'anadir') {
+      decoration = BoxDecoration(
+        color: const Color(0xFF003366).withValues(alpha: 0.6), // Azul oscuro
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.blue.withValues(alpha: 0.2), width: 1),
+      );
+    }
+
     return Container(
-      color: isSelected ? Colors.white.withValues(alpha: 0.1) : null,
+      margin: margin,
+      decoration: decoration,
       child: ListTile(
+        visualDensity: VisualDensity.compact,
         leading: Icon(icon, color: isSelected ? Colores.azulCielo : Colors.white),
-        title: Text(title, style: TextStyle(color: isSelected ? Colores.azulCielo : Colors.white, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal)),
+        title: Text(title,
+            style: TextStyle(
+                color: isSelected ? Colores.azulCielo : Colors.white,
+                fontSize: 14,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal)),
         onTap: () {
           setState(() => _seccionActual = seccion);
           if (isDrawer) Navigator.pop(context);

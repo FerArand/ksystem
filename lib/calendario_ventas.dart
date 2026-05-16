@@ -1,14 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'dart:convert';
 import 'databases/history_db.dart';
 import 'db_helper.dart';
 import 'constants/colores.dart';
 import 'Utils/impresion_ticket.dart';
 import 'models/producto.dart';
+import 'models/pedido.dart';
 import 'venta.dart';
 import 'factura_form.dart';
 import 'models/item_venta.dart' as modelo;
 import 'databases/app_database.dart';
+import 'Utils/formatters.dart';
 
 class CalendarioVentas extends StatefulWidget {
   const CalendarioVentas({Key? key}) : super(key: key);
@@ -121,7 +124,7 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
     setState(() {
       _datosDias = temp;
       _mejorProductoMes = maxVenta > 0 ? "Día récord: $diaMejor" : "Sin ventas";
-      _datoDestacado = "\$${maxVenta.toStringAsFixed(2)}";
+      _datoDestacado = Formatters.formatearMoneda(maxVenta);
       _topProductoNombre = nombreTop;
       _topProductoCant = cantTop;
       _fechaActual = fecha;
@@ -139,11 +142,67 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
     try {
       final String cliente = ticketData['cliente']?.toString() ?? "";
 
+      if (cliente.startsWith('Apartado de:') || cliente.startsWith('Liquidación de apartado:')) {
+        final String nombre = cliente.contains('Apartado de:') 
+            ? cliente.replaceFirst('Apartado de: ', '').trim()
+            : cliente.replaceFirst('Liquidación de apartado: ', '').trim();
+            
+        final bool isLiquidacion = cliente.startsWith('Liquidación de apartado:');
+        final String itemsString = ticketData['items'] ?? "[]";
+        final dynamic itemsJson = jsonDecode(itemsString);
+        final String productoNombre = itemsJson.isNotEmpty ? itemsJson[0]['descripcion'].toString().replaceFirst('APARTADO: ', '') : "Producto";
+        final String sku = itemsJson.isNotEmpty ? itemsJson[0]['sku'].toString() : "N/A";
+        final double montoPagado = (ticketData['total'] as num).toDouble();
+        final double costo = (ticketData['costo_total'] as num).toDouble();
+        
+        // Intentamos buscar el pedido en la base de datos para obtener datos completos (precio normal, etc)
+        final db = await AppDatabase.instance.database;
+        final res = await db.query('pedidos', where: 'cliente_nombre = ? AND producto_nombre = ?', whereArgs: [nombre, productoNombre]);
+        
+        Pedido pedido;
+        if (res.isNotEmpty) {
+          pedido = Pedido.desdeMapa(res.first);
+        } else {
+          // Si no existe, creamos un dummy con lo que tenemos
+          pedido = Pedido(
+            clienteNombre: nombre,
+            clienteContacto: "N/A",
+            productoNombre: productoNombre,
+            productoSku: sku,
+            precioNormal: montoPagado,
+            precioApartado: montoPagado,
+            abonoInicial: isLiquidacion ? 0 : montoPagado,
+            totalPagado: isLiquidacion ? montoPagado : montoPagado,
+            costo: costo,
+            descuento: 0,
+            fechaCreacion: ticketData['fecha'],
+            estado: isLiquidacion ? 'entregado' : 'pendiente',
+          );
+        }
+
+        await ImpresionTicket.imprimirTicketPedido(
+          pedido: pedido,
+          montoPagadoMomento: montoPagado,
+          recibido: (ticketData['recibido'] as num?)?.toDouble() ?? montoPagado,
+          cambio: (ticketData['cambio'] as num?)?.toDouble() ?? 0,
+          isLiquidacion: isLiquidacion,
+          isCopy: true,
+        );
+        return;
+      }
+
       if (cliente.startsWith('Abono a deuda de:')) {
         final String nombre = cliente.replaceFirst('Abono a deuda de: ', '').trim();
         final String itemsString = ticketData['items'] ?? "[]";
         final items = modelo.ItemVenta.listaDesdeString(itemsString);
         final double montoAbonado = (ticketData['total'] as num).toDouble();
+        
+        final double recibido = ticketData['recibido'] != null 
+            ? (ticketData['recibido'] as num).toDouble() 
+            : montoAbonado;
+        final double cambio = ticketData['cambio'] != null 
+            ? (ticketData['cambio'] as num).toDouble() 
+            : 0.0;
 
         // Buscamos si el deudor aún existe para mostrar saldo real
         final db = await AppDatabase.instance.database;
@@ -163,6 +222,9 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
           montoAbonado: montoAbonado,
           deudaAnterior: deudaAnterior,
           saldoRestante: saldoRestante,
+          recibido: recibido,
+          cambio: cambio,
+          isCopy: true,
         );
         return;
       }
@@ -184,7 +246,8 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
           recibido: recibido,
           cambio: cambio,
           folioVenta: folio,
-          fechaOriginal: fechaOriginal
+          fechaOriginal: fechaOriginal,
+          isCopy: true,
       );
     } catch (e) {
       if (!mounted) return;
@@ -199,7 +262,7 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
 
     for (var item in itemsParseados) {
       Producto pDummy = Producto(
-          id: 0, codigo: "HIST", sku: item.sku, factura: "", descripcion: item.descripcion, marca: "",
+          id: 0, codigo: "HIST", sku: item.sku, factura: "", ubicacion: "", descripcion: item.descripcion, marca: "",
           stock: 0, costo: item.costo, precio: item.precio, precioRappi: 0, borrado: false
       );
       itemsReconstruidos.add(ItemVenta(producto: pDummy, cantidad: item.cantidad));
@@ -256,13 +319,30 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
                     ? Column(
                   children: [
                     Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         IconButton(icon: const Icon(Icons.arrow_back_ios, color: Colors.blue, size: 20), onPressed: () => _cambiarMes(-1)),
+                        const SizedBox(width: 10),
                         Text(DateFormat('MMMM yyyy', 'es_MX').format(_fechaActual).toUpperCase(),
-                            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colores.azulPrincipal)),
+                            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colores.azulPrincipal)),
+                        const SizedBox(width: 10),
                         IconButton(icon: const Icon(Icons.arrow_forward_ios, color: Colors.blue, size: 20), onPressed: () => _cambiarMes(1)),
                       ],
+                    ),
+                    const SizedBox(height: 10),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 10.0),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Text("Producto del mes: ", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey)),
+                          Flexible(
+                            child: Text(_topProductoNombre, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                          ),
+                          const SizedBox(width: 8),
+                          Text("($_topProductoCant)", style: const TextStyle(fontSize: 11, color: Colors.blue, fontWeight: FontWeight.bold)),
+                        ],
+                      ),
                     ),
                     const SizedBox(height: 10),
                     SingleChildScrollView(
@@ -302,7 +382,7 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
                       width: 250,
                       child: Center(
                         child: Text(DateFormat('MMMM yyyy', 'es_MX').format(_fechaActual).toUpperCase(),
-                            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colores.azulPrincipal)),
+                            style: const TextStyle(fontSize: 30, fontWeight: FontWeight.bold, color: Colores.azulPrincipal)),
                       ),
                     ),
                     IconButton(icon: const Icon(Icons.arrow_forward_ios, color: Colors.blue), onPressed: () => _cambiarMes(1)),
@@ -416,12 +496,11 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text("Total", style: TextStyle(fontSize: isSmall ? 8 : 9, fontWeight: FontWeight.bold, color: Colors.blueGrey)),
-                Text("\$${semVenta.toStringAsFixed(0)}",
-                    style: TextStyle(fontWeight: FontWeight.w900, fontSize: isSmall ? 12 : 16, color: Colors.blue)),
-                if (!isSmall)
-                  Text("G: \$${semGan.toStringAsFixed(0)}",
-                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.green[800])),
+                Text("Total", style: TextStyle(fontSize: isSmall ? 10 : 12, fontWeight: FontWeight.bold, color: Colors.blueGrey)),
+                Text(Formatters.formatearMonedaCompacta(semVenta),
+                    style: TextStyle(fontWeight: FontWeight.w900, fontSize: isSmall ? 14 : 20, color: Colors.blue)),
+                Text("G: ${Formatters.formatearMonedaCompacta(semGan)}",
+                    style: TextStyle(fontSize: isSmall ? 11 : 14, fontWeight: FontWeight.bold, color: Colors.green[800])),
               ],
             ),
           ),
@@ -468,24 +547,39 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
           child: Padding(
             padding: const EdgeInsets.all(2.0),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 Text(
                     fecha.day.toString(),
                     style: TextStyle(
                         fontWeight: FontWeight.bold,
-                        fontSize: isSmall ? 10 : 12,
+                        fontSize: isSmall ? 12 : 14,
                         color: esHoy ? Colors.orange[900] : (esMesActual ? Colors.grey[700] : Colors.grey[400])
                     )
                 ),
                 if (venta > 0) ...[
                   const Spacer(),
-                  Center(child: Text("\$${venta.toStringAsFixed(0)}",
-                      style: TextStyle(fontWeight: FontWeight.w900, fontSize: isSmall ? 12 : 16, color: Colors.black87))),
-                  if (!isSmall)
-                    Center(child: Text("+\$${ganancia.toStringAsFixed(0)}",
-                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.green[800]))),
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Center(
+                      child: Text(Formatters.formatearMonedaCompacta(venta),
+                          style: TextStyle(fontWeight: FontWeight.w900, fontSize: isSmall ? 16 : 22, color: Colors.black87)),
+                    ),
+                  ),
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Center(
+                      child: Text("+${Formatters.formatearMonedaCompacta(ganancia)}",
+                          style: TextStyle(fontSize: isSmall ? 12 : 15, fontWeight: FontWeight.bold, color: Colors.green[800])),
+                    ),
+                  ),
                   const Spacer(),
+                  Flexible(
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Icon(Icons.visibility, size: isSmall ? 10 : 14, color: Colors.grey[400]),
+                    ),
+                  ),
                 ]
               ],
             ),
@@ -511,7 +605,9 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
         context: context,
         builder: (ctx) => LayoutBuilder(
             builder: (context, constraints) {
-              bool isMobile = constraints.maxWidth < 700;
+              // Lógica de móvil comentada para priorizar vista de Tablet/Escritorio
+              // bool isMobile = constraints.maxWidth < 700;
+              bool isMobile = false;
               return Dialog(
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                 child: SizedBox(
@@ -555,6 +651,7 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
                           children: [
                             Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [
                               _infoBox("COSTO", tCosto, Colors.red, isMobile),
+                              const SizedBox(width: 20),
                               _infoBox("LIQUIDEZ", tVenta, Colors.black, isMobile),
                             ]),
                             const Divider(),
@@ -606,7 +703,9 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
         context: context,
         builder: (ctx) => LayoutBuilder(
             builder: (context, constraints) {
-              bool isMobile = constraints.maxWidth < 700;
+              // Lógica de móvil comentada para priorizar vista de Tablet/Escritorio
+              // bool isMobile = constraints.maxWidth < 700;
+              bool isMobile = false;
               return Dialog(
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                 child: SizedBox(
@@ -725,7 +824,7 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
         Text(titulo, style: TextStyle(fontSize: small ? 9 : 11, fontWeight: FontWeight.bold, color: Colors.grey)),
-        Text("\$${valor.toStringAsFixed(2)}", style: TextStyle(fontSize: small ? 18 : 22, fontWeight: FontWeight.bold, color: color)),
+        Text(Formatters.formatearMoneda(valor), style: TextStyle(fontSize: small ? 18 : 22, fontWeight: FontWeight.bold, color: color)),
       ],
     );
   }
@@ -771,7 +870,7 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
           trailing: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text("\$${t['total'].toStringAsFixed(2)}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+              Text(Formatters.formatearMoneda(t['total'] ?? 0.0), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
               IconButton(
                 icon: const Icon(Icons.description, color: Colores.azulPrincipal, size: 20),
                 onPressed: () => _abrirFacturaDesdeHistorial(t),
@@ -850,7 +949,7 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
                   child: Icon(Icons.payments, color: Colors.white)
               ),
               title: Text(item['nombre'], style: const TextStyle(fontWeight: FontWeight.bold)),
-              subtitle: Text("INGRESO POR ABONO: \$${item['bruto'].toStringAsFixed(2)}",
+              subtitle: Text("INGRESO POR ABONO: ${Formatters.formatearMoneda(item['bruto'])}",
                   style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green, fontSize: 16)),
             ),
           );
@@ -911,12 +1010,15 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
                       ],
                     ),
                     const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        _miniDato("COSTO", costoFinal, Colors.red),
-                        _miniDato("VENTA", ventaFinal, Colors.black),
-                        _miniDato("GANANCIA", ganancia, Colors.green),
-                      ],
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: [
+                          _miniDato("COSTO", costoFinal, Colors.red),
+                          _miniDato("VENTA", ventaFinal, Colors.black),
+                          _miniDato("GANANCIA", ganancia, Colors.green),
+                        ],
+                      ),
                     )
                   ],
                 ),
@@ -952,7 +1054,7 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(lab, style: const TextStyle(fontSize: 9, color: Colors.grey, fontWeight: FontWeight.bold)),
-        Text("\$${val.toStringAsFixed(2)}", style: TextStyle(color: col, fontWeight: FontWeight.bold, fontSize: 13)),
+        Text(Formatters.formatearMoneda(val), style: TextStyle(color: col, fontWeight: FontWeight.bold, fontSize: 13)),
       ],
     ),
   );

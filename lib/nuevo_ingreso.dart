@@ -101,10 +101,10 @@ class _NuevoIngresoState extends State<NuevoIngreso> {
         context: context,
         builder: (ctx) => AlertDialog(
           title: const Text("¿Eliminar Producto del Sistema?"),
-          content: Text("${p.descripcion} Hará K-Boom"),
+          content: Text("\"${p.descripcion}\" Se eliminará"),
           actions: [
-            TextButton(onPressed: ()=>Navigator.pop(ctx, false), child: const Text("Mejor no")),
-            TextButton(onPressed: ()=>Navigator.pop(ctx, true), child: const Text("Dinamítalo! 💥", style: TextStyle(color: Colors.red))),
+            TextButton(onPressed: ()=>Navigator.pop(ctx, false), child: const Text("Cancelar")),
+            TextButton(onPressed: ()=>Navigator.pop(ctx, true), child: const Text("ELIMINAR", style: TextStyle(color: Colors.red))),
           ],
         )
     );
@@ -122,14 +122,30 @@ class _NuevoIngresoState extends State<NuevoIngreso> {
   void _abrirFormularioProducto({required String codigoInicial, Producto? productoExistente}) {
     showDialog(
         context: context,
-        barrierDismissible: false,
+        barrierDismissible: true,
         builder: (ctx) => ProductFormDialog(
           codigoInicial: codigoInicial,
           productoExistente: productoExistente,
           onGuardado: (p) {
             _actualizarListaVisual(p);
             _notificar(productoExistente != null ? "Producto actualizado" : "Producto creado");
-            _scannerFocus.requestFocus();
+            
+            // Si el usuario vino desde "Pedidos", regresamos automáticamente
+            // Mostramos un SnackBar antes de cerrar para dar feedback
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text("Producto '${p.descripcion}' seleccionado automáticamente"),
+                backgroundColor: Colors.green,
+                duration: const Duration(seconds: 2),
+              )
+            );
+            
+            // Retrasamos ligeramente el cierre para que se vea el mensaje
+            Future.delayed(const Duration(milliseconds: 500), () {
+              if (mounted) {
+                Navigator.pop(context, p);
+              }
+            });
           },
         )
     );
@@ -138,7 +154,7 @@ class _NuevoIngresoState extends State<NuevoIngreso> {
   Future<void> _mostrarDialogoVinculacion(String codigo) async {
     await showDialog(
         context: context,
-        barrierDismissible: false,
+        barrierDismissible: true,
         builder: (context) => DialogoVincular(
           codigoEscaneado: codigo,
           onVincular: (p) async {
@@ -147,8 +163,24 @@ class _NuevoIngresoState extends State<NuevoIngreso> {
             await _registrarEnMemoria(codigo);
             p.codigo = codigo; p.stock += 1;
             _actualizarListaVisual(p);
-            Navigator.pop(context);
-            _notificar("Vinculado correctamente");
+            
+            // Si el usuario vino desde "Pedidos", regresamos automáticamente
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text("Producto '${p.descripcion}' vinculado y seleccionado"),
+                backgroundColor: Colors.blue,
+                duration: const Duration(seconds: 2),
+              )
+            );
+
+            Future.delayed(const Duration(milliseconds: 500), () {
+              if (mounted) {
+                // Cerramos el diálogo de vinculación
+                Navigator.pop(context); 
+                // Y regresamos a la pantalla de Pedidos con el producto
+                Navigator.pop(context, p);
+              }
+            });
           },
           onCrearNuevo: () {
             Navigator.pop(context);
@@ -164,49 +196,67 @@ class _NuevoIngresoState extends State<NuevoIngreso> {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(16.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          TextField(
-            controller: _scannerController,
-            focusNode: _scannerFocus,
-            autofocus: true,
-            decoration: const InputDecoration(
-                labelText: "Escanea un producto para sumar o crear",
-                prefixIcon: Icon(Icons.qr_code_2, size: 30),
-                border: OutlineInputBorder(),
-                filled: true,
-                fillColor: Color(0xFFE8F5E9)
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text("Añadir Productos"),
+        backgroundColor: Colores.grisOscuro,
+        foregroundColor: Colors.white,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () {
+            // Si hay productos en la lista, devolvemos el más reciente (el que se acaba de crear/escanear)
+            if (_agregadosRecientemente.isNotEmpty) {
+              Navigator.pop(context, _agregadosRecientemente.first);
+            } else {
+              Navigator.pop(context);
+            }
+          },
+        ),
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            TextField(
+              controller: _scannerController,
+              focusNode: _scannerFocus,
+              autofocus: true,
+              decoration: const InputDecoration(
+                  labelText: "Escanea un producto para sumar o crear",
+                  prefixIcon: Icon(Icons.qr_code_2, size: 30),
+                  border: OutlineInputBorder(),
+                  filled: true,
+                  fillColor: Color(0xFFE8F5E9)
+              ),
+              onSubmitted: _procesarCodigo,
             ),
-            onSubmitted: _procesarCodigo,
-          ),
-          const SizedBox(height: 10),
-          Expanded(
-            child: _cargando
-                ? const Center(child: CircularProgressIndicator())
-                : _agregadosRecientemente.isEmpty
-                ? const Center(child: Text("Sin registros recientes", style: TextStyle(color: Colors.grey, fontSize: 18)))
-                : ListView.builder(
-              itemCount: _agregadosRecientemente.length,
-              itemBuilder: (context, i) {
-                // 1. Usamos la variable correcta de esta pantalla
-                final p = _agregadosRecientemente[i];
+            const SizedBox(height: 10),
+            Expanded(
+              child: _cargando
+                  ? const Center(child: CircularProgressIndicator())
+                  : _agregadosRecientemente.isEmpty
+                  ? const Center(child: Text("Sin registros recientes", style: TextStyle(color: Colors.grey, fontSize: 18)))
+                  : ListView.builder(
+                itemCount: _agregadosRecientemente.length,
+                itemBuilder: (context, i) {
+                  // 1. Usamos la variable correcta de esta pantalla
+                  final p = _agregadosRecientemente[i];
 
-                return ProductCard(
-                  producto: p,
-                  onEdit: () => _abrirFormularioProducto(
-                    codigoInicial: p.codigo,
-                    productoExistente: p,
-                  ),
-                  onDelete: () => _eliminarProducto(p),
-                  onStockChange: (cantidad) => _modificarStock(p, cantidad),
-                );
-              },
-            ),
-          )
-        ],
+                  return ProductCard(
+                    producto: p,
+                    onEdit: () => _abrirFormularioProducto(
+                      codigoInicial: p.codigo,
+                      productoExistente: p,
+                    ),
+                    onDelete: () => _eliminarProducto(p),
+                    onStockChange: (cantidad) => _modificarStock(p, cantidad),
+                  );
+                },
+              ),
+            )
+          ],
+        ),
       ),
     );
   }

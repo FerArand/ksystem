@@ -3,6 +3,7 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'inicio.dart';
 import 'dart:io';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+import 'package:window_manager/window_manager.dart';
 import 'databases/app_database.dart';
 import 'databases/history_db.dart';
 
@@ -13,6 +14,21 @@ void main() async {
   if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
     sqfliteFfiInit();
     databaseFactory = databaseFactoryFfi;
+
+    try {
+      await windowManager.ensureInitialized();
+      WindowOptions windowOptions = const WindowOptions(
+        minimumSize: Size(1000, 750), // Límite mínimo ajustado a tamaño Tablet/Escritorio
+        center: true,
+        title: 'KTOOLS Inventory Local',
+      );
+      windowManager.waitUntilReadyToShow(windowOptions, () async {
+        await windowManager.show();
+        await windowManager.focus();
+      });
+    } catch (e) {
+      debugPrint("Error inicializando windowManager: $e");
+    }
   }
 
   await AppDatabase.instance.database;

@@ -39,7 +39,7 @@ class _AgotadosState extends State<Agotados> {
   void _abrirEdicion(Producto p) {
     showDialog(
         context: context,
-        barrierDismissible: false,
+        barrierDismissible: true,
         builder: (ctx) => ProductFormDialog(
           productoExistente: p,
           onGuardado: (prodActualizado) {

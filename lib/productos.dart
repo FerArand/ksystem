@@ -33,8 +33,8 @@ class _ProductosState extends State<Productos> {
     } else {
       maps = await db.query(
           'productos',
-          where: 'descripcion LIKE ? OR codigo LIKE ? OR sku LIKE ? OR marca LIKE ?',
-          whereArgs: ['%$_query%', '%$_query%', '%$_query%', '%$_query%']
+          where: 'descripcion LIKE ? OR codigo LIKE ? OR sku LIKE ? OR marca LIKE ? OR ubicacion LIKE ?',
+          whereArgs: ['%$_query%', '%$_query%', '%$_query%', '%$_query%', '%$_query%']
       );
     }
 
@@ -77,7 +77,7 @@ class _ProductosState extends State<Productos> {
   void _abrirEdicion(Producto p) {
     showDialog(
         context: context,
-        barrierDismissible: false,
+        barrierDismissible: true,
         builder: (ctx) => ProductFormDialog(
           productoExistente: p, // Pasamos el producto para que rellene los datos
           onGuardado: (prodActualizado) {

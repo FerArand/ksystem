@@ -19,10 +19,10 @@ class AppDatabase {
   Future<Database> _initDB(String filePath) async {
     final dbPath = await getApplicationDocumentsDirectory();
     final path = join(dbPath.path, filePath);
-    // version: 3 para soportar recibido y cambio en historial
+    // version: 4 para soportar ubicacion en productos
     return await openDatabase(
       path,
-      version: 3,
+      version: 5,
       onCreate: _createDB,
       onUpgrade: onUpgrade,
     );
@@ -35,6 +35,29 @@ class AppDatabase {
       if (oldVersion < 3) {
         await db.execute('ALTER TABLE ventas_historial ADD COLUMN recibido REAL DEFAULT 0');
         await db.execute('ALTER TABLE ventas_historial ADD COLUMN cambio REAL DEFAULT 0');
+      }
+      if (oldVersion < 4) {
+        await db.execute('ALTER TABLE productos ADD COLUMN ubicacion TEXT DEFAULT ""');
+      }
+      if (oldVersion < 5) {
+        await db.execute('''
+          CREATE TABLE pedidos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            cliente_nombre TEXT,
+            cliente_contacto TEXT,
+            producto_nombre TEXT,
+            producto_sku TEXT,
+            precio_normal REAL,
+            precio_apartado REAL,
+            abono_inicial REAL,
+            total_pagado REAL,
+            costo REAL,
+            descuento REAL,
+            fecha_creacion TEXT,
+            fecha_entrega TEXT,
+            estado TEXT
+          )
+        ''');
       }
     }
 
@@ -111,6 +134,7 @@ class AppDatabase {
         codigo TEXT UNIQUE,
         sku TEXT,
         factura TEXT,
+        ubicacion TEXT,
         descripcion TEXT,
         marca TEXT,
         costo REAL,
@@ -160,6 +184,25 @@ class AppDatabase {
         cantidad INTEGER,
         fecha_ingreso TEXT,
         accion TEXT
+      )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE pedidos (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        cliente_nombre TEXT,
+        cliente_contacto TEXT,
+        producto_nombre TEXT,
+        producto_sku TEXT,
+        precio_normal REAL,
+        precio_apartado REAL,
+        abono_inicial REAL,
+        total_pagado REAL,
+        costo REAL,
+        descuento REAL,
+        fecha_creacion TEXT,
+        fecha_entrega TEXT,
+        estado TEXT
       )
     ''');
   }

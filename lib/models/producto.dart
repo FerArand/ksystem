@@ -3,6 +3,7 @@ class Producto {
   String codigo; // Código de Barras (Universal)
   String sku;    // Código Interno (Nuevo)
   String factura;
+  String ubicacion;
   String descripcion;
   String marca;
   double costo;
@@ -16,6 +17,7 @@ class Producto {
     required this.codigo,
     required this.sku, // Nuevo
     required this.factura,
+    required this.ubicacion,
     required this.descripcion,
     required this.marca,
     required this.costo,
@@ -31,6 +33,7 @@ class Producto {
       codigo: map['codigo'] ?? '',
       sku: map['sku'] ?? '', // Nuevo
       factura: map['factura'] ?? '',
+      ubicacion: map['ubicacion'] ?? '',
       descripcion: map['descripcion'] ?? '',
       marca: map['marca'] ?? '',
       costo: map['costo'] ?? 0.0,
@@ -47,6 +50,7 @@ class Producto {
       'codigo': codigo,
       'sku': sku, // Nuevo
       'factura': factura,
+      'ubicacion': ubicacion,
       'descripcion': descripcion,
       'marca': marca,
       'costo': costo,

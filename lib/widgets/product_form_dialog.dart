@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../models/producto.dart';
 import '../db_helper.dart';
 import '../databases/recent_db.dart';
 import '../constants/colores.dart';
+import '../Utils/numeric_formatter.dart';
 
 class ProductFormDialog extends StatefulWidget {
   final String? codigoInicial;
@@ -30,7 +32,7 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
   late TextEditingController precioController;
   late TextEditingController gananciaController;
   late TextEditingController skuController;
-  late TextEditingController facturaController;
+  late TextEditingController ubicacionController;
   late TextEditingController cantidadController;
 
   final FocusNode costoFocus = FocusNode();
@@ -46,10 +48,10 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
     codigoController = TextEditingController(text: p?.codigo ?? widget.codigoInicial ?? "");
     descController = TextEditingController(text: p?.descripcion ?? "");
     marcaController = TextEditingController(text: p?.marca ?? "");
-    costoController = TextEditingController(text: p?.costo.toString() ?? "");
+    costoController = TextEditingController(text: p != null ? ThousandsSeparatorInputFormatter.format(p.costo) : "");
     skuController = TextEditingController(text: p?.sku ?? "");
-    facturaController = TextEditingController(text: p?.factura ?? "");
-    cantidadController = TextEditingController(text: p?.stock.toString() ?? "1");
+    ubicacionController = TextEditingController(text: p?.ubicacion ?? "");
+    cantidadController = TextEditingController(text: p != null ? ThousandsSeparatorInputFormatter.format(p.stock, isDecimal: false) : "1");
 
     double precioIni = p?.precio ?? 0.0;
     double gananciaIni = 46.0;
@@ -58,7 +60,7 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
     }
 
     gananciaController = TextEditingController(text: gananciaIni.toStringAsFixed(1));
-    precioController = TextEditingController(text: precioIni.toStringAsFixed(2));
+    precioController = TextEditingController(text: esEdicion ? ThousandsSeparatorInputFormatter.format(precioIni) : "0.00");
 
     costoController.addListener(_calcularPrecios);
     gananciaController.addListener(_calcularPrecios);
@@ -66,15 +68,16 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
   }
 
   void _calcularPrecios() {
-    double costo = double.tryParse(costoController.text) ?? 0;
+    double costo = ThousandsSeparatorInputFormatter.parse(costoController.text);
     if (costoFocus.hasFocus || gananciaFocus.hasFocus) {
       double ganancia = double.tryParse(gananciaController.text) ?? 0;
       double nuevoPrecio = costo * (1 + (ganancia / 100));
-      if (precioController.text != nuevoPrecio.toStringAsFixed(2)) {
-        precioController.text = nuevoPrecio.toStringAsFixed(2);
+      String nuevoPrecioStr = ThousandsSeparatorInputFormatter.format(nuevoPrecio);
+      if (precioController.text != nuevoPrecioStr) {
+        precioController.text = nuevoPrecioStr;
       }
     } else if (precioFocus.hasFocus) {
-      double precio = double.tryParse(precioController.text) ?? 0;
+      double precio = ThousandsSeparatorInputFormatter.parse(precioController.text);
       if (costo > 0) {
         double nuevaGanancia = ((precio / costo) - 1) * 100;
         gananciaController.text = nuevaGanancia.toStringAsFixed(1);
@@ -116,6 +119,7 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
                       return Row(children: [
                         Expanded(child: TextFormField(
                             controller: costoController, focusNode: costoFocus,
+                            inputFormatters: [ThousandsSeparatorInputFormatter()],
                             decoration: decoracion("Costo", obligatorio: true, suffix: "\$"), keyboardType: TextInputType.number, validator: validar
                         )),
                         const SizedBox(width: 10),
@@ -126,6 +130,7 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
                         const SizedBox(width: 10),
                         Expanded(child: TextFormField(
                           controller: precioController, focusNode: precioFocus,
+                          inputFormatters: [ThousandsSeparatorInputFormatter()],
                           decoration: InputDecoration(
                               labelText: "Precio Público", filled: true, fillColor: Colors.blue[50],
                               border: const OutlineInputBorder(), suffixText: "\$",
@@ -138,6 +143,7 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
                       return Column(children: [
                         TextFormField(
                             controller: costoController, focusNode: costoFocus,
+                            inputFormatters: [ThousandsSeparatorInputFormatter()],
                             decoration: decoracion("Costo", obligatorio: true, suffix: "\$"), keyboardType: TextInputType.number, validator: validar
                         ),
                         const SizedBox(height: 10),
@@ -148,6 +154,7 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
                         const SizedBox(height: 10),
                         TextFormField(
                           controller: precioController, focusNode: precioFocus,
+                          inputFormatters: [ThousandsSeparatorInputFormatter()],
                           decoration: InputDecoration(
                               labelText: "Precio Público", filled: true, fillColor: Colors.blue[50],
                               border: const OutlineInputBorder(), suffixText: "\$",
@@ -166,19 +173,24 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
                       return Row(children: [
                         Expanded(child: TextFormField(controller: skuController, decoration: decoracion("SKU (Opcional)"))),
                         const SizedBox(width: 10),
-                        Expanded(child: TextFormField(controller: facturaController, decoration: decoracion("Factura (Opcional)"))),
+                        Expanded(child: TextFormField(controller: ubicacionController, decoration: decoracion("Ubicación (Opcional)"))),
                       ]);
                     } else {
                       return Column(children: [
                         TextFormField(controller: skuController, decoration: decoracion("SKU (Opcional)")),
                         const SizedBox(height: 10),
-                        TextFormField(controller: facturaController, decoration: decoracion("Factura (Opcional)")),
+                        TextFormField(controller: ubicacionController, decoration: decoracion("Ubicación (Opcional)")),
                       ]);
                     }
                   }
                 ),
                 const SizedBox(height: 10),
-                TextFormField(controller: cantidadController, decoration: decoracion("Inventario"), keyboardType: TextInputType.number),
+                TextFormField(
+                  controller: cantidadController, 
+                  decoration: decoracion("Inventario"), 
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [ThousandsSeparatorInputFormatter(isDecimal: false)],
+                ),
               ],
             ),
           ),
@@ -190,15 +202,16 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
           style: ElevatedButton.styleFrom(backgroundColor: Colores.verde, foregroundColor: Colors.white),
           onPressed: () async {
             if (_formKey.currentState!.validate()) {
-              double costo = double.tryParse(costoController.text) ?? 0;
-              double pPublico = double.tryParse(precioController.text) ?? 0;
-              int stock = int.tryParse(cantidadController.text) ?? 0;
+              double costo = ThousandsSeparatorInputFormatter.parse(costoController.text);
+              double pPublico = ThousandsSeparatorInputFormatter.parse(precioController.text);
+              int stock = ThousandsSeparatorInputFormatter.parseInt(cantidadController.text);
 
               final prod = Producto(
                   id: widget.productoExistente?.id,
                   codigo: codigoController.text.trim(),
                   sku: skuController.text.trim(),
-                  factura: facturaController.text.trim(),
+                  factura: widget.productoExistente?.factura ?? "",
+                  ubicacion: ubicacionController.text.trim(),
                   marca: marcaController.text.trim(),
                   descripcion: descController.text.trim(),
                   costo: costo,

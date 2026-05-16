@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/producto.dart';
 import '../constants/colores.dart';
+import '../Utils/formatters.dart';
 
 class ProductCard extends StatelessWidget {
   final Producto producto;
@@ -58,7 +59,8 @@ class ProductCard extends StatelessWidget {
                     runSpacing: 4,
                     children: [
                       _infoTag("SKU: ${producto.sku}", Colors.blueGrey),
-                      _infoTag("\$${producto.precio.toStringAsFixed(2)}", Colors.green),
+                      _infoTag("Venta: ${Formatters.formatearMoneda(producto.precio)}", Colors.green),
+                      if (producto.ubicacion.isNotEmpty) _infoTag("Ubicación: ${producto.ubicacion}", Colors.orange),
                     ],
                   ),
                 ],

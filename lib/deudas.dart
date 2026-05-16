@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'databases/debt_db.dart';
 import 'models/item_venta.dart';
 
 import 'databases/history_db.dart';
 import 'Utils/impresion_ticket.dart';
+import 'Utils/formatters.dart';
+import 'Utils/numeric_formatter.dart';
 import 'package:intl/intl.dart';
 
 class Deudas extends StatefulWidget {
@@ -39,170 +42,273 @@ class _DeudasState extends State<Deudas> {
     // Parseamos directo a la lista de objetos
     final listaItems = ItemVenta.listaDesdeString(itemsRaw);
     final TextEditingController abonoCtrl = TextEditingController();
+    final TextEditingController recibidoCtrl = TextEditingController();
+    double cambioCalculado = 0.0;
 
     showDialog(
         context: context,
-        builder: (ctx) => LayoutBuilder(
-          builder: (context, constraints) {
-            bool isSmall = constraints.maxWidth < 650;
-            return AlertDialog(
-              title: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text("Cuenta de: ${deudor['nombre']}", style: const TextStyle(fontWeight: FontWeight.bold)),
-                  Text("Fecha último fiado: ${deudor['fecha_ultimo_fiado'].toString().split('.')[0]}",
-                      style: TextStyle(fontSize: 12, color: Colors.grey[600])),
-                ],
-              ),
-              content: SizedBox(
-                width: 600,
-                child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
+        builder: (ctx) => StatefulBuilder(
+          builder: (context, setStateDialog) {
+            return LayoutBuilder(
+              builder: (context, constraints) {
+                bool isSmall = constraints.maxWidth < 650;
+                
+                void calcularCambio() {
+                  double abono = ThousandsSeparatorInputFormatter.parse(abonoCtrl.text);
+                  double recibido = ThousandsSeparatorInputFormatter.parse(recibidoCtrl.text);
+                  setStateDialog(() {
+                    cambioCalculado = (recibido - abono) > 0 ? (recibido - abono) : 0.0;
+                  });
+                }
+
+                return AlertDialog(
+                  title: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Divider(),
-                      const Text("Productos Pendientes:", style: TextStyle(fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 5),
-                      Container(
-                        height: 250,
-                        decoration: BoxDecoration(
-                            border: Border.all(color: Colors.grey.shade300),
-                            borderRadius: BorderRadius.circular(5),
-                            color: Colors.grey[50]
-                        ),
-                        child: ListView.separated(
-                          padding: const EdgeInsets.all(8),
-                          separatorBuilder: (c, i) => const Divider(height: 1),
-                          itemCount: listaItems.length,
-                          itemBuilder: (c, i) {
-                            final item = listaItems[i]; // Ya es un objeto real
-
-                            return Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 6.0),
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Padding(
-                                    padding: EdgeInsets.only(top: 4.0),
-                                    child: Icon(Icons.circle, size: 6, color: Colors.red),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text("${item.cantidad}x ${item.descripcion}", style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
-                                        Wrap(
-                                          spacing: 8,
-                                          children: [
-                                            if (item.sku.isNotEmpty) _tag("SKU: ${item.sku}", Colors.blue),
-                                            if (item.precio > 0) _tag("Total: \$${item.precio}", Colors.green),
-                                            if (item.costo > 0) _tag("Mínimo aceptable: \$${item.costo}", Colors.grey),
-                                          ],
-                                        )
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-                      const SizedBox(height: 15),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text("TOTAL ADEUDADO:", style: TextStyle(fontWeight: FontWeight.bold)),
-                          Text("\$${deudor['total_deuda'].toStringAsFixed(2)}",
-                              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.red)),
-                        ],
-                      ),
-                      const SizedBox(height: 15),
-                      TextField(
-                        controller: abonoCtrl,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(
-                            labelText: "Monto a Pagar",
-                            prefixText: "\$",
-                            border: OutlineInputBorder(),
-                            filled: true,
-                            fillColor: Colors.white
-                        ),
-                      )
+                      Text("Cuenta de: ${deudor['nombre']}", style: const TextStyle(fontWeight: FontWeight.bold)),
+                      Text("Fecha último fiado: ${deudor['fecha_ultimo_fiado'].toString().split('.')[0]}",
+                          style: TextStyle(fontSize: 12, color: Colors.grey[600])),
                     ],
                   ),
-                ),
-              ),
-              actions: [
-                TextButton(onPressed: ()=>Navigator.pop(ctx), child: const Text("Cerrar")),
-                if (!isSmall)
-                ElevatedButton.icon(
-                  icon: const Icon(Icons.print),
-                  label: const Text("TICKET DE DEUDA"),
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.blue, foregroundColor: Colors.white),
-                  onPressed: () {
-                    ImpresionTicket.imprimirTicketAbono(
-                      nombreDeudor: deudor['nombre'],
-                      items: listaItems,
-                      montoAbonado: 0, // Solo impresión de consulta
-                      deudaAnterior: deudor['total_deuda'],
-                      saldoRestante: deudor['total_deuda'],
-                    );
-                  },
-                ),
-                ElevatedButton(
-                  onPressed: () async {
-                    double abono = double.tryParse(abonoCtrl.text) ?? 0;
-                    if (abono > 0) {
-                      final deudaPrevia = deudor['total_deuda'] as double;
-                      final saldoRestante = deudaPrevia - abono;
+                  content: SizedBox(
+                    width: 600,
+                    child: SingleChildScrollView(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Divider(),
+                          const Text("Productos Pendientes:", style: TextStyle(fontWeight: FontWeight.bold)),
+                          const SizedBox(height: 5),
+                          Container(
+                            height: 200,
+                            decoration: BoxDecoration(
+                                border: Border.all(color: Colors.grey.shade300),
+                                borderRadius: BorderRadius.circular(5),
+                                color: Colors.grey[50]
+                            ),
+                            child: ListView.separated(
+                              padding: const EdgeInsets.all(8),
+                              separatorBuilder: (c, i) => const Divider(height: 1),
+                              itemCount: listaItems.length,
+                              itemBuilder: (c, i) {
+                                final item = listaItems[i]; // Ya es un objeto real
 
-                      // 1. Registrar abono en la base de datos de deudas
-                      await DebtDB.instance.abonar(deudor['id'], abono);
+                                return Padding(
+                                  padding: const EdgeInsets.symmetric(vertical: 6.0),
+                                  child: Row(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const Padding(
+                                        padding: EdgeInsets.only(top: 4.0),
+                                        child: Icon(Icons.circle, size: 6, color: Colors.red),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text("${item.cantidad}x ${item.descripcion}", style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+                                            Wrap(
+                                              spacing: 8,
+                                              children: [
+                                                if (item.sku.isNotEmpty) _tag("SKU: ${item.sku}", Colors.blue),
+                                                if (item.precio > 0) _tag("Total: ${Formatters.formatearMoneda(item.precio)}", Colors.green),
+                                                if (item.costo > 0) _tag("Mínimo aceptable: ${Formatters.formatearMoneda(item.costo)}", Colors.grey),
+                                              ],
+                                            )
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                          const SizedBox(height: 15),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text("TOTAL ADEUDADO:", style: TextStyle(fontWeight: FontWeight.bold)),
+                              FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text(Formatters.formatearMoneda(deudor['total_deuda']),
+                                    style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.red)),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 15),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: StatefulBuilder(
+                                  builder: (context, setStateRecibido) {
+                                    return TextField(
+                                      controller: recibidoCtrl,
+                                      keyboardType: TextInputType.number,
+                                      inputFormatters: [ThousandsSeparatorInputFormatter()],
+                                      onChanged: (_) {
+                                        calcularCambio();
+                                      },
+                                      decoration: InputDecoration(
+                                          labelText: "Dinero Recibido",
+                                          prefixText: "\$",
+                                          border: const OutlineInputBorder(),
+                                          filled: true,
+                                          fillColor: Colors.white,
+                                          errorText: (() {
+                                            double abono = ThousandsSeparatorInputFormatter.parse(abonoCtrl.text);
+                                            double recibido = ThousandsSeparatorInputFormatter.parse(recibidoCtrl.text);
+                                            if (recibido < abono) return "Insuficiente";
+                                            return null;
+                                          })(),
+                                          errorStyle: const TextStyle(color: Colors.red),
+                                          focusedErrorBorder: const OutlineInputBorder(borderSide: BorderSide(color: Colors.red, width: 2)),
+                                          errorBorder: const OutlineInputBorder(borderSide: BorderSide(color: Colors.red))
+                                      ),
+                                    );
+                                  }
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: StatefulBuilder(
+                                  builder: (context, setStateError) {
+                                    return TextField(
+                                      controller: abonoCtrl,
+                                      keyboardType: TextInputType.number,
+                                      inputFormatters: [ThousandsSeparatorInputFormatter()],
+                                      onChanged: (val) {
+                                        calcularCambio();
+                                      },
+                                      decoration: InputDecoration(
+                                          labelText: "Monto a Abonar",
+                                          prefixText: "\$",
+                                          border: const OutlineInputBorder(),
+                                          filled: true,
+                                          fillColor: Colors.white,
+                                          errorText: (() {
+                                            double abono = ThousandsSeparatorInputFormatter.parse(abonoCtrl.text);
+                                            double deudaTotal = (deudor['total_deuda'] as num).toDouble();
+                                            if (abono <= 0) return "Monto inválido";
+                                            if (abono > deudaTotal) return "Excede la deuda";
+                                            return null;
+                                          })(),
+                                          errorStyle: const TextStyle(color: Colors.red),
+                                          focusedErrorBorder: const OutlineInputBorder(borderSide: BorderSide(color: Colors.red, width: 2)),
+                                          errorBorder: const OutlineInputBorder(borderSide: BorderSide(color: Colors.red))
+                                      ),
+                                    );
+                                  }
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(color: Colors.green[50], borderRadius: BorderRadius.circular(5)),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                const Text("CAMBIO A ENTREGAR:", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.green)),
+                                Text(Formatters.formatearMoneda(cambioCalculado), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.green)),
+                              ],
+                            ),
+                          )
+                        ],
+                      ),
+                    ),
+                  ),
+                  actions: [
+                    TextButton(onPressed: ()=>Navigator.pop(ctx), child: const Text("Cerrar")),
+                    if (!isSmall)
+                    ElevatedButton.icon(
+                      icon: const Icon(Icons.print),
+                      label: const Text("TICKET DE DEUDA"),
+                      style: ElevatedButton.styleFrom(backgroundColor: Colors.blue, foregroundColor: Colors.white),
+                      onPressed: () {
+                        ImpresionTicket.imprimirTicketAbono(
+                          nombreDeudor: deudor['nombre'],
+                          items: listaItems,
+                          montoAbonado: 0, // Solo impresión de consulta
+                          deudaAnterior: deudor['total_deuda'],
+                          saldoRestante: deudor['total_deuda'],
+                        );
+                      },
+                    ),
+                    ElevatedButton(
+                      onPressed: () async {
+                        double abono = ThousandsSeparatorInputFormatter.parse(abonoCtrl.text);
+                        double recibido = ThousandsSeparatorInputFormatter.parse(recibidoCtrl.text);
+                        final deudaPrevia = (deudor['total_deuda'] as num).toDouble();
 
-                      // 2. Registrar el ingreso en el calendario (HistoryDB)
-                      final fecha = DateFormat('yyyy-MM-dd HH:mm:ss').format(DateTime.now());
-                      
-                      // RECUPERAR ITEMS PARA EL HISTORIAL (Para que la reimpresión sea exacta)
-                      String itemsDeuda = deudor['items'] ?? '[]';
+                        if (abono > 0 && abono <= deudaPrevia && recibido >= abono) {
+                          final abonoAplicado = abono;
+                          final saldoRestante = deudaPrevia - abonoAplicado;
+                          
+                          final cambioTotal = recibido - abono;
+                          final recibidoTotal = recibido;
 
-                      await HistoryDB.instance.registrarVenta(
-                        fecha: fecha,
-                        total: abono,
-                        costoTotal: 0, // No es venta de stock nuevo, es cobro de deuda
-                        items: itemsDeuda, 
-                        recibido: abono,
-                        cambio: 0,
-                        cliente: 'Abono a deuda de: ${deudor['nombre']}'
-                      );
+                          // 1. Registrar abono en la base de datos de deudas
+                          await DebtDB.instance.abonar(deudor['id'], abonoAplicado);
 
-                      // 3. Generar Ticket de Abono
-                      await ImpresionTicket.imprimirTicketAbono(
-                        nombreDeudor: deudor['nombre'],
-                        items: listaItems,
-                        montoAbonado: abono,
-                        deudaAnterior: deudaPrevia,
-                        saldoRestante: saldoRestante < 0 ? 0 : saldoRestante,
-                      );
+                          // 2. Registrar el ingreso en el calendario (HistoryDB)
+                          final fecha = DateFormat('yyyy-MM-dd HH:mm:ss').format(DateTime.now());
+                          
+                          // RECUPERAR ITEMS PARA EL HISTORIAL (Para que la reimpresión sea exacta)
+                          String itemsDeuda = deudor['items'] ?? '[]';
 
-                      if (!mounted) return;
+                          await HistoryDB.instance.registrarVenta(
+                            fecha: fecha,
+                            total: abonoAplicado,
+                            costoTotal: 0, // El costo ya se registró cuando se pidió el fiado
+                            items: itemsDeuda, 
+                            recibido: recibidoTotal,
+                            cambio: cambioTotal,
+                            cliente: 'Abono a deuda de: ${deudor['nombre']}'
+                          );
 
-                      _cargarDeudores();
-                      Navigator.pop(ctx);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text("Pago registrado")),
-                      );
-                    }
-                  },
-                  child: const Text("REGISTRAR PAGO"),
-                )
-              ],
+                          // 3. Generar Ticket de Abono
+                          await ImpresionTicket.imprimirTicketAbono(
+                            nombreDeudor: deudor['nombre'],
+                            items: listaItems,
+                            montoAbonado: abonoAplicado,
+                            deudaAnterior: deudaPrevia,
+                            saldoRestante: saldoRestante < 0 ? 0 : saldoRestante,
+                            recibido: recibidoTotal,
+                            cambio: cambioTotal,
+                          );
+
+                          if (!mounted) return;
+
+                          _cargarDeudores();
+                          Navigator.pop(ctx);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text("Pago registrado")),
+                          );
+                        }
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.green,
+                        foregroundColor: Colors.white,
+                      ),
+                      child: const Text("REGISTRAR PAGO"),
+                    )
+                  ],
+                );
+              }
             );
           }
         )
-    ).then((_) => abonoCtrl.dispose()); // Aquí evitamos la fuga de memoria
+    ).then((_) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        abonoCtrl.dispose();
+        recibidoCtrl.dispose();
+      });
+    }); // Aquí evitamos la fuga de memoria y el error de _dependents
   }
 
   Widget _tag(String texto, MaterialColor colorBase) {
@@ -308,7 +414,7 @@ class _DeudasState extends State<Deudas> {
                             crossAxisAlignment: CrossAxisAlignment.end,
                             children: [
                               const Text("ADEUDO", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey)),
-                              Text("\$${d['total_deuda'].toStringAsFixed(2)}", style: TextStyle(fontSize: isSmall ? 18 : 22, fontWeight: FontWeight.bold, color: Colors.red)),
+                              Text(Formatters.formatearMoneda(d['total_deuda']), style: TextStyle(fontSize: isSmall ? 18 : 22, fontWeight: FontWeight.bold, color: Colors.red)),
                             ],
                           ),
                           if (!isSmall) ...[

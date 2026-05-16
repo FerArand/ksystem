@@ -25,7 +25,7 @@ class DBHelper {
     final db = await _db;
     final res = await db.query(
         'productos',
-        where: 'descripcion LIKE ? OR factura LIKE ? OR sku LIKE ?',
+        where: 'descripcion LIKE ? OR ubicacion LIKE ? OR sku LIKE ?',
         whereArgs: ['%$query%', '%$query%', '%$query%'],
         limit: 20 // Límite para proteger la memoria
     );
@@ -44,7 +44,7 @@ class DBHelper {
   Future<List<Map<String, dynamic>>> buscarProductos(String query) async {
     final db = await _db;
     return await db.query('productos',
-        where: 'descripcion LIKE ? OR codigo LIKE ? OR sku LIKE ? OR factura LIKE ?',
+        where: 'descripcion LIKE ? OR codigo LIKE ? OR sku LIKE ? OR ubicacion LIKE ?',
         whereArgs: ['%$query%', '%$query%', '%$query%', '%$query%']);
   }
 

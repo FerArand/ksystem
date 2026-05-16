@@ -4,10 +4,12 @@ import 'db_helper.dart';
 import 'models/producto.dart';
 import 'constants/colores.dart';
 import 'Utils/impresion_ticket.dart';
+import 'Utils/formatters.dart';
 import 'databases/history_db.dart';
 import 'databases/debt_db.dart';
 import 'widgets/product_form_dialog.dart';
 import 'factura_form.dart';
+import 'Utils/numeric_formatter.dart';
 import 'models/item_venta.dart' as modelo;
 import 'package:flutter/material.dart';
 
@@ -141,7 +143,14 @@ class _VentaState extends State<Venta> {
                 decoration: const InputDecoration(labelText: "Nombre del Cliente", border: OutlineInputBorder(), prefixIcon: Icon(Icons.person)),
               ),
               const SizedBox(height: 10),
-              Text("A deber: \$${_total.toStringAsFixed(2)}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.red))
+              const Text("A deber: ", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  Formatters.formatearMoneda(_total),
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.red),
+                ),
+              )
             ],
           ),
           actions: [
@@ -154,6 +163,26 @@ class _VentaState extends State<Venta> {
 
                   // Usamos el JSON en lugar del string con pipes
                   await DebtDB.instance.actualizarDeuda(nombre, itemsResumenJson, _total);
+
+                  // REGISTRO DE COSTO EN EL CALENDARIO PARA CONTABILIDAD
+                  double costoTotalVenta = 0.0;
+                  for (var item in _carrito) {
+                    costoTotalVenta += (item.producto.costo * item.cantidad);
+                  }
+                  
+                  final fecha = DateFormat('yyyy-MM-dd HH:mm:ss').format(DateTime.now());
+                  
+                  // Registramos una venta de "Fiado" con 0 liquidez pero con el costo total
+                  // Esto permite que el calendario reste el costo de la ganancia del día
+                  await HistoryDB.instance.registrarVenta(
+                    fecha: fecha,
+                    total: 0, // No hay ingreso de dinero aún
+                    costoTotal: costoTotalVenta,
+                    items: itemsResumenJson,
+                    recibido: 0,
+                    cambio: 0,
+                    cliente: 'Venta a crédito (Fiado): $nombre'
+                  );
 
                   for (var item in _carrito) {
                     await DBHelper.instance.updateStock(item.producto.codigo, -item.cantidad);
@@ -303,7 +332,7 @@ class _VentaState extends State<Venta> {
   Future<void> _preguntarFactura(int ventaId, List<int> ticketPdf) async {
     await showDialog(
       context: context,
-      barrierDismissible: false,
+      barrierDismissible: true,
       builder: (ctx) => AlertDialog(
         title: const Text("¿Desea Factura?"),
         content: const Text("Se enviará la solicitud con los datos fiscales y una copia del ticket."),
@@ -415,7 +444,7 @@ class _VentaState extends State<Venta> {
               borderRadius: BorderRadius.circular(8),
             ),
             child: Text(
-              "\$${_calcResultado.toStringAsFixed(2)}",
+              Formatters.formatearMoneda(_calcResultado),
               style: const TextStyle(
                   color: Colors.white,
                   fontWeight: FontWeight.bold,
@@ -506,7 +535,7 @@ class _VentaState extends State<Venta> {
                                   children: [
                                     Text(p.descripcion, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                                     // Stock puede ser negativo, se muestra tal cual
-                                    Text("\$${p.precio.toStringAsFixed(2)} c/u  |  Quedan: ${p.stock}",
+                                    Text("${Formatters.formatearMoneda(p.precio)} c/u  |  Quedan: ${p.stock}",
                                         style: TextStyle(color: p.stock <= 0 ? Colors.red : Colors.grey[700], fontSize: 13)
                                     ),
                                   ],
@@ -536,9 +565,13 @@ class _VentaState extends State<Venta> {
                               const SizedBox(width: 15),
                               SizedBox(
                                 width: 80,
-                                child: Text("\$${item.subtotal.toStringAsFixed(2)}",
-                                    textAlign: TextAlign.right,
-                                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colores.azulPrincipal)),
+                                child: FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  alignment: Alignment.centerRight,
+                                  child: Text(Formatters.formatearMoneda(item.subtotal),
+                                      textAlign: TextAlign.right,
+                                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colores.azulPrincipal)),
+                                ),
                               ),
                               const SizedBox(width: 10),
                               IconButton(
@@ -573,16 +606,21 @@ class _VentaState extends State<Venta> {
                           const Divider(thickness: 2),
                           const Spacer(),
                           Text("TOTAL A PAGAR", style: TextStyle(color: Colors.grey[600], fontSize: 14)),
-                          Text("\$${_total.toStringAsFixed(2)}", style: const TextStyle(fontSize: 40, fontWeight: FontWeight.bold, color: Colors.blue)),
+                          FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerLeft,
+                            child: Text(Formatters.formatearMoneda(_total), style: const TextStyle(fontSize: 40, fontWeight: FontWeight.bold, color: Colors.blue)),
+                          ),
                           const SizedBox(height: 30),
                           TextField(
                             controller: _recibidoController,
+                            inputFormatters: [ThousandsSeparatorInputFormatter()],
                             decoration: const InputDecoration(labelText: "Dinero Recibido", prefixText: "\$", border: OutlineInputBorder(), filled: true, fillColor: Colors.white),
                             keyboardType: TextInputType.number,
                             style: const TextStyle(fontSize: 20),
                             onChanged: (val) {
                               setState(() {
-                                _recibido = double.tryParse(val) ?? 0.0;
+                                _recibido = ThousandsSeparatorInputFormatter.parse(val);
                               });
                             },
                           ),
@@ -593,7 +631,10 @@ class _VentaState extends State<Venta> {
                             child: Column(
                               children: [
                                 const Text("Cambio", style: TextStyle(fontSize: 14)),
-                                Text("\$${(_recibido - _total).toStringAsFixed(2)}", style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: (_recibido - _total) >= 0 ? Colors.green : Colors.red)),
+                                FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  child: Text(Formatters.formatearMoneda(_recibido - _total), style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: (_recibido - _total) >= 0 ? Colors.green : Colors.red)),
+                                ),
                               ],
                             ),
                           ),
@@ -670,7 +711,11 @@ class _DialogoBusquedaVentaState extends State<DialogoBusquedaVenta> {
         const SizedBox(height: 10),
         Expanded(child: ListView.separated(separatorBuilder: (c, i) => const Divider(), itemCount: _resultados.length, itemBuilder: (c, i) {
           final p = _resultados[i];
-          return ListTile(title: Text(p.descripcion, style: const TextStyle(fontWeight: FontWeight.bold)), subtitle: Text("\$${p.precio} | Stock: ${p.stock}"), trailing: ElevatedButton(child: const Text("Agregar"), onPressed: () => widget.onSeleccionado(p)));
+          return ListTile(
+            title: Text(p.descripcion, style: const TextStyle(fontWeight: FontWeight.bold)),
+            subtitle: Text("${Formatters.formatearMoneda(p.precio)} | Stock: ${p.stock}"),
+            trailing: ElevatedButton(child: const Text("Agregar"), onPressed: () => widget.onSeleccionado(p)),
+          );
         }))
       ])),
       actions: [TextButton(onPressed: ()=>Navigator.pop(context), child: const Text("Cancelar"))],
