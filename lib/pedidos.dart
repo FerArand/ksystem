@@ -70,21 +70,7 @@ class _PedidosState extends State<Pedidos> {
             padding: const EdgeInsets.all(16.0),
             child: Row(
               children: [
-                Expanded(
-                  child: TextField(
-                    controller: _searchController,
-                    decoration: InputDecoration(
-                      hintText: "Buscar interesado o producto...",
-                      prefixIcon: const Icon(Icons.search, color: Colors.orange),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                        borderSide: const BorderSide(color: Colors.orange, width: 2),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 16),
+                // Z-PATTERN: ACCIÓN PRINCIPAL ARRIBA A LA IZQUIERDA
                 ElevatedButton.icon(
                   onPressed: _nuevoPedido,
                   icon: const Icon(Icons.add),
@@ -94,6 +80,36 @@ class _PedidosState extends State<Pedidos> {
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    elevation: 4,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(10),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.05),
+                          blurRadius: 5,
+                          offset: const Offset(0, 2),
+                        )
+                      ],
+                    ),
+                    child: TextField(
+                      controller: _searchController,
+                      decoration: InputDecoration(
+                        hintText: "Buscar interesado o producto...",
+                        prefixIcon: const Icon(Icons.search, color: Colors.orange),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: const BorderSide(color: Colors.orange, width: 2),
+                        ),
+                        filled: true,
+                        fillColor: Colors.white,
+                      ),
+                    ),
                   ),
                 ),
               ],
@@ -283,7 +299,7 @@ class _PedidosState extends State<Pedidos> {
                         IconButton(
                           icon: const Icon(Icons.add_circle, color: Colors.green),
                           onPressed: () {
-                            Navigator.push<Producto?>(this.context, MaterialPageRoute(builder: (c) => const NuevoIngreso())).then((nuevoP) {
+                            Navigator.push<Producto?>(this.context, MaterialPageRoute(builder: (c) => const NuevoIngreso(esPicker: true))).then((nuevoP) {
                               if (nuevoP != null) {
                                 setDialogState(() {
                                   productoSeleccionado = nuevoP;

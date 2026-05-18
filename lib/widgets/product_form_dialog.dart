@@ -67,6 +67,23 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
     precioController.addListener(_calcularPrecios);
   }
 
+  @override
+  void dispose() {
+    codigoController.dispose();
+    descController.dispose();
+    marcaController.dispose();
+    costoController.dispose();
+    precioController.dispose();
+    gananciaController.dispose();
+    skuController.dispose();
+    ubicacionController.dispose();
+    cantidadController.dispose();
+    costoFocus.dispose();
+    gananciaFocus.dispose();
+    precioFocus.dispose();
+    super.dispose();
+  }
+
   void _calcularPrecios() {
     double costo = ThousandsSeparatorInputFormatter.parse(costoController.text);
     if (costoFocus.hasFocus || gananciaFocus.hasFocus) {

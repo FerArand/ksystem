@@ -7,7 +7,8 @@ import 'constants/colores.dart';
 import 'widgets/product_form_dialog.dart'; // <--- ÚNICO CAMBIO: Importar el formulario
 
 class NuevoIngreso extends StatefulWidget {
-  const NuevoIngreso({Key? key}) : super(key: key);
+  final bool esPicker; // Si es true, regresa el producto al cerrar
+  const NuevoIngreso({Key? key, this.esPicker = false}) : super(key: key);
 
   @override
   State<NuevoIngreso> createState() => _NuevoIngresoState();
@@ -130,25 +131,35 @@ class _NuevoIngresoState extends State<NuevoIngreso> {
             _actualizarListaVisual(p);
             _notificar(productoExistente != null ? "Producto actualizado" : "Producto creado");
             
-            // Si el usuario vino desde "Pedidos", regresamos automáticamente
-            // Mostramos un SnackBar antes de cerrar para dar feedback
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text("Producto '${p.descripcion}' seleccionado automáticamente"),
-                backgroundColor: Colors.green,
-                duration: const Duration(seconds: 2),
-              )
-            );
-            
-            // Retrasamos ligeramente el cierre para que se vea el mensaje
-            Future.delayed(const Duration(milliseconds: 500), () {
+            if (widget.esPicker) {
+              // Si el usuario vino desde "Pedidos", regresamos automáticamente
+              // Mostramos un SnackBar antes de cerrar para dar feedback
               if (mounted) {
-                Navigator.pop(context, p);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text("Producto '${p.descripcion}' seleccionado automáticamente"),
+                    backgroundColor: Colors.green,
+                    duration: const Duration(seconds: 2),
+                  )
+                );
               }
-            });
+              
+              // Retrasamos ligeramente el cierre para que se vea el mensaje
+              Future.delayed(const Duration(milliseconds: 500), () {
+                if (mounted) {
+                  Navigator.pop(context, p);
+                }
+              });
+            } else {
+              // Si no es picker, solo nos aseguramos de recuperar el foco del escáner
+              _scannerFocus.requestFocus();
+            }
           },
         )
-    );
+    ).then((_) {
+      // Al cerrar el diálogo (sea por guardar o cancelar), pedimos foco
+      _scannerFocus.requestFocus();
+    });
   }
 
   Future<void> _mostrarDialogoVinculacion(String codigo) async {
@@ -164,23 +175,29 @@ class _NuevoIngresoState extends State<NuevoIngreso> {
             p.codigo = codigo; p.stock += 1;
             _actualizarListaVisual(p);
             
-            // Si el usuario vino desde "Pedidos", regresamos automáticamente
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text("Producto '${p.descripcion}' vinculado y seleccionado"),
-                backgroundColor: Colors.blue,
-                duration: const Duration(seconds: 2),
-              )
-            );
+            if (widget.esPicker) {
+              // Si el usuario vino desde "Pedidos", regresamos automáticamente
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text("Producto '${p.descripcion}' vinculado y seleccionado"),
+                  backgroundColor: Colors.blue,
+                  duration: const Duration(seconds: 2),
+                )
+              );
 
-            Future.delayed(const Duration(milliseconds: 500), () {
-              if (mounted) {
-                // Cerramos el diálogo de vinculación
-                Navigator.pop(context); 
-                // Y regresamos a la pantalla de Pedidos con el producto
-                Navigator.pop(context, p);
-              }
-            });
+              Future.delayed(const Duration(milliseconds: 500), () {
+                if (mounted) {
+                  // Cerramos el diálogo de vinculación
+                  Navigator.pop(context); 
+                  // Y regresamos a la pantalla de Pedidos con el producto
+                  Navigator.pop(context, p);
+                }
+              });
+            } else {
+              Navigator.pop(context); // Solo cerramos el diálogo
+              _notificar("Producto vinculado: ${p.descripcion}");
+              _scannerFocus.requestFocus();
+            }
           },
           onCrearNuevo: () {
             Navigator.pop(context);
@@ -201,7 +218,7 @@ class _NuevoIngresoState extends State<NuevoIngreso> {
         title: const Text("Añadir Productos"),
         backgroundColor: Colores.grisOscuro,
         foregroundColor: Colors.white,
-        leading: IconButton(
+        leading: widget.esPicker ? IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () {
             // Si hay productos en la lista, devolvemos el más reciente (el que se acaba de crear/escanear)
@@ -211,7 +228,7 @@ class _NuevoIngresoState extends State<NuevoIngreso> {
               Navigator.pop(context);
             }
           },
-        ),
+        ) : null, // Ocultar si está en el menú lateral para evitar pantalla negra
       ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),

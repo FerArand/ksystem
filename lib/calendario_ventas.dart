@@ -121,6 +121,8 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
       }
     }
 
+    if (!mounted) return;
+
     setState(() {
       _datosDias = temp;
       _mejorProductoMes = maxVenta > 0 ? "Día récord: $diaMejor" : "Sin ventas";
@@ -311,130 +313,105 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
           bool isSmall = constraints.maxWidth < 900;
           return Column(
             children: [
-              // HEADER
+              // --- ENCABEZADO UNIFICADO ---
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+                decoration: const BoxDecoration(
+                  color: Colores.calendario,
+                  boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 2))],
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.calendar_month, color: Colors.white, size: 28),
+                    const SizedBox(width: 15),
+                    const Text("CALENDARIO DE VENTAS", style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
+                    const Spacer(),
+                    if (!isSmall) ...[
+                      _recordCard(),
+                    ]
+                  ],
+                ),
+              ),
+
+              // HEADER CONTROLES
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 color: Colors.white,
-                child: isSmall
-                    ? Column(
+                child: Column(
                   children: [
                     Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        IconButton(icon: const Icon(Icons.arrow_back_ios, color: Colors.blue, size: 20), onPressed: () => _cambiarMes(-1)),
-                        const SizedBox(width: 10),
-                        Text(DateFormat('MMMM yyyy', 'es_MX').format(_fechaActual).toUpperCase(),
-                            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colores.azulPrincipal)),
-                        const SizedBox(width: 10),
-                        IconButton(icon: const Icon(Icons.arrow_forward_ios, color: Colors.blue, size: 20), onPressed: () => _cambiarMes(1)),
+                        Expanded(
+                          child: Align(
+                            alignment: Alignment.centerRight,
+                            child: IconButton(
+                              icon: const Icon(Icons.arrow_back_ios, color: Colores.calendario, size: 20),
+                              onPressed: () => _cambiarMes(-1),
+                            ),
+                          ),
+                        ),
+                        SizedBox(
+                          width: 250,
+                          child: Text(
+                            DateFormat('MMMM yyyy', 'es_MX').format(_fechaActual).toUpperCase(),
+                            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colores.calendario),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                        Expanded(
+                          child: Row(
+                            children: [
+                              IconButton(
+                                icon: const Icon(Icons.arrow_forward_ios, color: Colores.calendario, size: 20),
+                                onPressed: () => _cambiarMes(1),
+                              ),
+                              const Spacer(),
+                              if (isSmall) _recordCard(compact: true),
+                            ],
+                          ),
+                        ),
                       ],
                     ),
                     const SizedBox(height: 10),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 10.0),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Text("Producto del mes: ", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey)),
-                          Flexible(
-                            child: Text(_topProductoNombre, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                          ),
-                          const SizedBox(width: 8),
-                          Text("($_topProductoCant)", style: const TextStyle(fontSize: 11, color: Colors.blue, fontWeight: FontWeight.bold)),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Row(
-                        children: [
-                          OutlinedButton.icon(
-                            icon: const Icon(Icons.today, size: 16),
-                            label: const Text("Hoy", style: TextStyle(fontSize: 12)),
-                            onPressed: () => _cargarDatosMes(DateTime.now()),
-                          ),
-                          const SizedBox(width: 8),
-                          OutlinedButton.icon(
-                            icon: const Icon(Icons.search, color: Colores.azulPrincipal, size: 16),
-                            label: const Text("Folio", style: TextStyle(color: Colores.azulPrincipal, fontWeight: FontWeight.bold, fontSize: 12)),
-                            style: OutlinedButton.styleFrom(side: const BorderSide(color: Colores.azulPrincipal)),
-                            onPressed: _mostrarBuscadorFolio,
-                          ),
-                          const SizedBox(width: 8),
-                          ElevatedButton.icon(
-                            icon: const Icon(Icons.analytics, size: 16),
-                            label: const Text("Resumen", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                            style: ElevatedButton.styleFrom(backgroundColor: Colores.azulPrincipal, foregroundColor: Colors.white),
-                            onPressed: _mostrarResumenMensual,
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    _recordCard(compact: true),
-                  ],
-                )
-                    : Row(
-                  children: [
-                    IconButton(icon: const Icon(Icons.arrow_back_ios, color: Colors.blue), onPressed: () => _cambiarMes(-1)),
-                    SizedBox(
-                      width: 250,
-                      child: Center(
-                        child: Text(DateFormat('MMMM yyyy', 'es_MX').format(_fechaActual).toUpperCase(),
-                            style: const TextStyle(fontSize: 30, fontWeight: FontWeight.bold, color: Colores.azulPrincipal)),
-                      ),
-                    ),
-                    IconButton(icon: const Icon(Icons.arrow_forward_ios, color: Colors.blue), onPressed: () => _cambiarMes(1)),
-                    const SizedBox(width: 10),
-                    OutlinedButton.icon(
-                      icon: const Icon(Icons.today),
-                      label: const Text("Hoy"),
-                      onPressed: () => _cargarDatosMes(DateTime.now()),
-                    ),
-                    const SizedBox(width: 8),
-                    OutlinedButton.icon(
-                      icon: const Icon(Icons.search, color: Colores.azulPrincipal),
-                      label: const Text("Folio", style: TextStyle(color: Colores.azulPrincipal, fontWeight: FontWeight.bold)),
-                      style: OutlinedButton.styleFrom(side: const BorderSide(color: Colores.azulPrincipal)),
-                      onPressed: _mostrarBuscadorFolio,
-                    ),
-                    const SizedBox(width: 8),
-                    ElevatedButton.icon(
-                      icon: const Icon(Icons.analytics),
-                      label: const Text("Resumen mensual", style: TextStyle(fontWeight: FontWeight.bold)),
-                      style: ElevatedButton.styleFrom(backgroundColor: Colores.azulPrincipal, foregroundColor: Colors.white),
-                      onPressed: _mostrarResumenMensual,
-                    ),
-                    Expanded(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 10.0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            const Text("Producto del mes:", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey)),
-                            Text(_topProductoNombre, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
-                            Text("Ventas: $_topProductoCant", style: const TextStyle(fontSize: 11, color: Colors.blue)),
-                          ],
+                    Row(
+                      children: [
+                        OutlinedButton.icon(
+                          icon: const Icon(Icons.today, size: 18),
+                          label: const Text("HOY"),
+                          style: OutlinedButton.styleFrom(foregroundColor: Colores.calendario, side: const BorderSide(color: Colores.calendario)),
+                          onPressed: () => _cargarDatosMes(DateTime.now()),
                         ),
-                      ),
+                        const SizedBox(width: 10),
+                        OutlinedButton.icon(
+                          icon: const Icon(Icons.search, size: 18),
+                          label: const Text("BUSCAR FOLIO"),
+                          style: OutlinedButton.styleFrom(foregroundColor: Colores.calendario, side: const BorderSide(color: Colores.calendario)),
+                          onPressed: _mostrarBuscadorFolio,
+                        ),
+                        const Spacer(),
+                        ElevatedButton.icon(
+                          icon: const Icon(Icons.analytics, size: 18),
+                          label: const Text("RESUMEN MENSUAL"),
+                          style: ElevatedButton.styleFrom(backgroundColor: Colores.calendario, foregroundColor: Colors.white, elevation: 2),
+                          onPressed: _mostrarResumenMensual,
+                        ),
+                      ],
                     ),
-                    _recordCard(),
                   ],
                 ),
               ),
               // DÍAS SEMANA
               Container(
-                color: Colors.grey[200],
+                color: Colors.grey[100],
                 padding: const EdgeInsets.symmetric(vertical: 8),
                 child: Row(
-                  children: ['DOM', 'LUN', 'MAR', 'MIÉ', 'JUE', 'VIE', 'SÁB', 'TOTAL'].map((d) => Expanded(
-                      flex: d == 'TOTAL' ? 2 : 1,
+                  children: ['DOM', 'LUN', 'MAR', 'MIÉ', 'JUE', 'VIE', 'SÁB', 'TOTAL SEM'].map((d) => Expanded(
+                      flex: d == 'TOTAL SEM' ? 2 : 1,
                       child: Center(child: Text(d, style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey[600], fontSize: isSmall ? 10 : 12)))
                   )).toList(),
                 ),
               ),
-              Expanded(child: _cargando ? const Center(child: CircularProgressIndicator()) : _buildCalendarioGrid(isSmall: isSmall)),
+              Expanded(child: _cargando ? const Center(child: CircularProgressIndicator(color: Colores.calendario)) : _buildCalendarioGrid(isSmall: isSmall)),
             ],
           );
         }
@@ -696,8 +673,8 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
       tCosto += (t['costo_total'] as num).toDouble();
     }
 
-    setState(() => _cargando = false);
     if (!mounted) return;
+    setState(() => _cargando = false);
 
     showDialog(
         context: context,
@@ -803,7 +780,9 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
     }
 
     // Si lo encontró, cerramos el buscador
-    Navigator.pop(dialogCtx);
+    if (dialogCtx.mounted) {
+      Navigator.pop(dialogCtx);
+    }
 
     // Parsear fecha de la venta (YYYY-MM-DD ...)
     DateTime fechaVenta = DateTime.parse(venta['fecha']);
@@ -812,11 +791,17 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
     if (fechaVenta.year != _fechaActual.year || fechaVenta.month != _fechaActual.month) {
       await _cargarDatosMes(DateTime(fechaVenta.year, fechaVenta.month, 1));
       // Actualizamos _fechaActual manualmente por si el setState no ha terminado
-      _fechaActual = DateTime(fechaVenta.year, fechaVenta.month, 1);
+      if (mounted) {
+        setState(() {
+          _fechaActual = DateTime(fechaVenta.year, fechaVenta.month, 1);
+        });
+      }
     }
 
     // 2. Abrir detalle del día en la pestaña de tickets (index 1)
-    _abrirDetalleDia(fechaVenta, initialTab: 1);
+    if (mounted) {
+      _abrirDetalleDia(fechaVenta, initialTab: 1);
+    }
   }
 
   Widget _infoBox(String titulo, double valor, Color color, [bool small = false]) {

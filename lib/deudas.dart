@@ -8,6 +8,7 @@ import 'Utils/impresion_ticket.dart';
 import 'Utils/formatters.dart';
 import 'Utils/numeric_formatter.dart';
 import 'package:intl/intl.dart';
+import 'constants/colores.dart';
 
 class Deudas extends StatefulWidget {
   const Deudas({Key? key}) : super(key: key);
@@ -272,15 +273,17 @@ class _DeudasState extends State<Deudas> {
                           );
 
                           // 3. Generar Ticket de Abono
-                          await ImpresionTicket.imprimirTicketAbono(
-                            nombreDeudor: deudor['nombre'],
-                            items: listaItems,
-                            montoAbonado: abonoAplicado,
-                            deudaAnterior: deudaPrevia,
-                            saldoRestante: saldoRestante < 0 ? 0 : saldoRestante,
-                            recibido: recibidoTotal,
-                            cambio: cambioTotal,
-                          );
+                          if (mounted) {
+                            await ImpresionTicket.imprimirTicketAbono(
+                              nombreDeudor: deudor['nombre'],
+                              items: listaItems,
+                              montoAbonado: abonoAplicado,
+                              deudaAnterior: deudaPrevia,
+                              saldoRestante: saldoRestante < 0 ? 0 : saldoRestante,
+                              recibido: recibidoTotal,
+                              cambio: cambioTotal,
+                            );
+                          }
 
                           if (!mounted) return;
 
@@ -328,122 +331,125 @@ class _DeudasState extends State<Deudas> {
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        bool isSmall = constraints.maxWidth < 700;
-        return Column(
-          children: [
-            // Barra Superior
-            Container(
-              padding: const EdgeInsets.all(16),
-              color: Colors.white,
-              child: isSmall
-                  ? Column(
-                      children: [
-                        Row(
-                          children: [
-                            const Icon(Icons.money_off, size: 28, color: Colors.red),
-                            const SizedBox(width: 10),
-                            const Text("Deudas", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.red)),
-                          ],
-                        ),
-                        const SizedBox(height: 10),
-                        TextField(
-                          decoration: const InputDecoration(hintText: "Buscar deudor...", prefixIcon: Icon(Icons.search), border: OutlineInputBorder(), isDense: true),
-                          onChanged: (v) {
-                            _query = v;
-                            _cargarDeudores();
-                          },
-                        )
-                      ],
-                    )
-                  : Row(
-                      children: [
-                        const Icon(Icons.money_off, size: 28, color: Colors.red),
-                        const SizedBox(width: 10),
-                        const Text("Control de Deudas", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.red)),
-                        const SizedBox(width: 20),
-                        Expanded(
-                          child: TextField(
-                            decoration: const InputDecoration(hintText: "Buscar deudor...", prefixIcon: Icon(Icons.search), border: OutlineInputBorder()),
-                            onChanged: (v) {
-                              _query = v;
-                              _cargarDeudores();
-                            },
-                          ),
-                        )
-                      ],
-                    ),
-            ),
+    return Column(
+      children: [
+        // --- ENCABEZADO UNIFICADO ---
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+          decoration: const BoxDecoration(
+            color: Colores.deudas,
+            boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 2))],
+          ),
+          child: const Row(
+            children: [
+              Icon(Icons.money_off, color: Colors.white, size: 28),
+              const SizedBox(width: 15),
+              const Text("CONTROL DE DEUDAS", style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
+            ],
+          ),
+        ),
 
-            // Lista de Tarjetas
-            Expanded(
-              child: _cargando
-                  ? const Center(child: CircularProgressIndicator())
-                  : _deudores.isEmpty
+        Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Row(
+            children: [
+              // Z-PATTERN: ACCIÓN/BÚSQUEDA COMIENZA AQUÍ
+              Expanded(
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(10),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.05),
+                        blurRadius: 5,
+                        offset: const Offset(0, 2),
+                      )
+                    ],
+                  ),
+                  child: TextField(
+                    decoration: InputDecoration(
+                        hintText: "Buscar deudor por nombre...",
+                        prefixIcon: const Icon(Icons.search, color: Colores.deudas),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Colores.deudas, width: 2)),
+                        filled: true,
+                        fillColor: Colors.white,
+                    ),
+                    onChanged: (v) {
+                      _query = v;
+                      _cargarDeudores();
+                    },
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        // Lista de Tarjetas
+        Expanded(
+          child: _cargando
+              ? const Center(child: CircularProgressIndicator(color: Colores.deudas))
+              : _deudores.isEmpty
                   ? const Center(child: Text("No hay deudas pendientes.", style: TextStyle(fontSize: 18, color: Colors.grey)))
                   : ListView.builder(
-                padding: const EdgeInsets.all(16),
-                itemCount: _deudores.length,
-                itemBuilder: (ctx, i) {
-                  final d = _deudores[i];
-                  return Card(
-                    elevation: 3,
-                    margin: const EdgeInsets.only(bottom: 10),
-                    child: Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Row(
-                        children: [
-                          CircleAvatar(
-                            backgroundColor: Colors.red[50],
-                            radius: isSmall ? 20 : 25,
-                            child: Text(d['nombre'][0].toString().toUpperCase(),
-                                style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red, fontSize: isSmall ? 16 : 20)),
-                          ),
-                          const SizedBox(width: 15),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(d['nombre'], style: TextStyle(fontSize: isSmall ? 16 : 18, fontWeight: FontWeight.bold)),
-                                Text("Último mov: ${d['fecha_ultimo_fiado'].toString().split(' ')[0]}", style: TextStyle(color: Colors.grey[600], fontSize: 12)),
-                              ],
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      itemCount: _deudores.length,
+                      itemBuilder: (ctx, i) {
+                        final d = _deudores[i];
+                        return Card(
+                          elevation: 2,
+                          margin: const EdgeInsets.only(bottom: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(12),
+                            onTap: () => _verDetalle(d),
+                            child: Padding(
+                              padding: const EdgeInsets.all(16.0),
+                              child: Row(
+                                children: [
+                                  CircleAvatar(
+                                    backgroundColor: Colors.red[50],
+                                    radius: 25,
+                                    child: Text(d['nombre'][0].toString().toUpperCase(),
+                                        style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.red, fontSize: 20)),
+                                  ),
+                                  const SizedBox(width: 15),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(d['nombre'], style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                                        const SizedBox(height: 4),
+                                        Row(
+                                          children: [
+                                            const Icon(Icons.access_time, size: 14, color: Colors.grey),
+                                            const SizedBox(width: 4),
+                                            Text("Último movimiento: ${d['fecha_ultimo_fiado'].toString().split(' ')[0]}", style: TextStyle(color: Colors.grey[600], fontSize: 12)),
+                                          ],
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Column(
+                                    crossAxisAlignment: CrossAxisAlignment.end,
+                                    children: [
+                                      const Text("ADEUDO TOTAL", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey)),
+                                      Text(Formatters.formatearMoneda(d['total_deuda']), style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.red)),
+                                    ],
+                                  ),
+                                  const SizedBox(width: 10),
+                                  const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
+                                ],
+                              ),
                             ),
                           ),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              const Text("ADEUDO", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey)),
-                              Text(Formatters.formatearMoneda(d['total_deuda']), style: TextStyle(fontSize: isSmall ? 18 : 22, fontWeight: FontWeight.bold, color: Colors.red)),
-                            ],
-                          ),
-                          if (!isSmall) ...[
-                            const SizedBox(width: 20),
-                            ElevatedButton.icon(
-                              icon: const Icon(Icons.visibility, size: 18),
-                              label: const Text("Detalles"),
-                              onPressed: () => _verDetalle(d),
-                              style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.white,
-                                  foregroundColor: Colors.blue,
-                                  side: const BorderSide(color: Colors.blue)
-                              ),
-                            )
-                          ] else 
-                            IconButton(
-                              icon: const Icon(Icons.visibility, color: Colors.blue),
-                              onPressed: () => _verDetalle(d),
-                            )
-                        ],
-                      ),
+                        );
+                      },
                     ),
-                  );
-                },
-              ),
-            )
-          ],
-        );
-      }
+        )
+      ],
     );
   }
 }

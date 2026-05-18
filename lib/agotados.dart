@@ -3,6 +3,7 @@ import 'db_helper.dart';
 import 'models/producto.dart';
 import 'widgets/product_form_dialog.dart';
 import 'widgets/product_card.dart';
+import 'constants/colores.dart';
 
 class Agotados extends StatefulWidget {
   const Agotados({Key? key}) : super(key: key);
@@ -54,18 +55,29 @@ class _AgotadosState extends State<Agotados> {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        const Padding(
-          padding: EdgeInsets.all(16.0),
-          child: Text("Productos Agotados",
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.red)),
+        // --- ENCABEZADO UNIFICADO ---
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+          decoration: const BoxDecoration(
+            color: Colores.agotados,
+            boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 2))],
+          ),
+          child: const Row(
+            children: [
+              Icon(Icons.warning_amber_rounded, color: Colors.white, size: 28),
+              const SizedBox(width: 15),
+              const Text("PRODUCTOS AGOTADOS", style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
+            ],
+          ),
         ),
+
         Expanded(
           child: _cargando
-              ? const Center(child: CircularProgressIndicator())
+              ? const Center(child: CircularProgressIndicator(color: Colores.agotados))
               : _listaAgotados.isEmpty
-              ? const Center(child: Text("No hay productos agotados", style: TextStyle(fontSize: 18)))
+              ? const Center(child: Text("No hay productos agotados", style: TextStyle(fontSize: 18, color: Colors.grey)))
               : ListView.builder(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
+            padding: const EdgeInsets.all(16),
             itemCount: _listaAgotados.length,
             itemBuilder: (ctx, i) {
               final p = _listaAgotados[i];

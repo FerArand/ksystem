@@ -3,6 +3,7 @@ import 'db_helper.dart';
 import 'models/producto.dart';
 import 'widgets/product_form_dialog.dart'; // <--- Importamos el formulario unificado
 import 'widgets/product_card.dart';
+import 'constants/colores.dart';
 
 class Productos extends StatefulWidget {
   const Productos({Key? key}) : super(key: key);
@@ -94,30 +95,65 @@ class _ProductosState extends State<Productos> {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        // BARRA DE BÚSQUEDA
+        // --- ENCABEZADO UNIFICADO ---
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+          decoration: const BoxDecoration(
+            color: Colores.consultar,
+            boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 2))],
+          ),
+          child: const Row(
+            children: [
+              Icon(Icons.inventory, color: Colors.white, size: 28),
+              const SizedBox(width: 15),
+              const Text("INVENTARIO TOTAL", style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
+            ],
+          ),
+        ),
+
+        // BARRA DE BÚSQUEDA (Z-PATTERN: Foco inicial arriba a la izquierda)
         Padding(
           padding: const EdgeInsets.all(16.0),
-          child: TextField(
-            controller: _searchController,
-            decoration: const InputDecoration(
-                labelText: "Buscar producto...",
-                prefixIcon: Icon(Icons.search),
-                border: OutlineInputBorder(),
-                filled: true,
-                fillColor: Colors.white
-            ),
-            onChanged: (v) {
-              _query = v;
-              setState(() => _cargando = true);
-              _cargarProductos();
-            },
+          child: Row(
+            children: [
+              Expanded(
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(10),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.05),
+                        blurRadius: 5,
+                        offset: const Offset(0, 2),
+                      )
+                    ],
+                  ),
+                  child: TextField(
+                    controller: _searchController,
+                    decoration: InputDecoration(
+                        labelText: "Buscar producto por Nombre, SKU o Código...",
+                        prefixIcon: const Icon(Icons.search, color: Colores.consultar),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Colores.consultar, width: 2)),
+                        filled: true,
+                        fillColor: Colors.white,
+                    ),
+                    onChanged: (v) {
+                      _query = v;
+                      setState(() => _cargando = true);
+                      _cargarProductos();
+                    },
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
 
         // LISTA DE PRODUCTOS (Estilo Tarjeta Renovado)
         Expanded(
           child: _cargando
-              ? const Center(child: CircularProgressIndicator())
+              ? const Center(child: CircularProgressIndicator(color: Colores.consultar))
               : _listaProductos.isEmpty
               ? const Center(child: Text("No se encontraron productos", style: TextStyle(color: Colors.grey)))
               : ListView.builder(
