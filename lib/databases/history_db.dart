@@ -1,6 +1,7 @@
 import 'app_database.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:flutter/foundation.dart';
+import 'dart:convert';
 
 class HistoryDB {
   static final HistoryDB instance = HistoryDB._init();
@@ -43,7 +44,25 @@ class HistoryDB {
       'es_activo': 1
     });
 
-    // 2. Opcional: Sincronizamos el folio_venta con el ID generado
+    // 2. Insertamos el detalle de los productos (Desglose real para historial y devoluciones)
+    try {
+      final List<dynamic> itemsList = jsonDecode(items);
+      for (var it in itemsList) {
+        await db.insert('ventas_detalles', {
+          'venta_id': idGenerado,
+          'sku': it['sku'] ?? 'N/A',
+          'descripcion': it['descripcion'] ?? 'Sin descripción',
+          'cantidad': it['cantidad'] ?? 1,
+          'precio': (it['precio'] as num).toDouble(),
+          'costo': (it['costo'] as num).toDouble(),
+          'estado': 'activo'
+        });
+      }
+    } catch (e) {
+      debugPrint('[HistoryDB] Error al guardar detalles: $e');
+    }
+
+    // 3. Opcional: Sincronizamos el folio_venta con el ID generado
     // para que coincidan en tus tickets y reportes.
     await db.update(
         'ventas_historial',
@@ -65,6 +84,85 @@ class HistoryDB {
       // o simplemente imprimir en desarrollo:
       debugPrint('[HistoryDB] Error al depurar: $e');
     }
+  }
+
+  Future<void> actualizarVentaModificada({
+    required int id,
+    required double nuevoTotal,
+    required double nuevoCosto,
+    required String nuevosItems,
+    List<Map<String, dynamic>>? itemsDevueltos,
+    required String nuevoFolioDisplay,
+  }) async {
+    final db = await _db;
+    
+    // 1. Actualizar cabecera (ventas_historial)
+    await db.update('ventas_historial', {
+      'total': nuevoTotal,
+      'costo_total': nuevoCosto,
+      'items': nuevosItems,
+      'folio_venta': nuevoFolioDisplay
+    }, where: 'id = ?', whereArgs: [id]);
+
+    // 2. Marcar items devueltos en la tabla de detalles
+    if (itemsDevueltos != null) {
+      for (var item in itemsDevueltos) {
+        // Obtenemos los registros activos para este SKU en esta venta
+        final res = await db.query(
+          'ventas_detalles',
+          where: 'venta_id = ? AND sku = ? AND estado = ?',
+          whereArgs: [id, item['sku'], 'activo'],
+        );
+
+        int cantidadPorDevolver = item['cantidad'];
+
+        for (var row in res) {
+          if (cantidadPorDevolver <= 0) break;
+
+          int idRenglon = row['id'] as int;
+          int cantidadEnRenglon = row['cantidad'] as int;
+
+          if (cantidadEnRenglon <= cantidadPorDevolver) {
+            // Devolución total del renglón o el renglón es menor a lo que falta devolver
+            await db.update(
+              'ventas_detalles',
+              {'estado': 'devuelto'},
+              where: 'id = ?',
+              whereArgs: [idRenglon]
+            );
+            cantidadPorDevolver -= cantidadEnRenglon;
+          } else {
+            // Devolución PARCIAL del renglón (Escenario de los Martillos)
+            // 1. Restamos la cantidad al renglón original
+            await db.update(
+              'ventas_detalles',
+              {'cantidad': cantidadEnRenglon - cantidadPorDevolver},
+              where: 'id = ?',
+              whereArgs: [idRenglon]
+            );
+
+            // 2. Creamos un nuevo renglón para la parte devuelta
+            await db.insert('ventas_detalles', {
+              'venta_id': id,
+              'sku': row['sku'],
+              'descripcion': row['descripcion'],
+              'cantidad': cantidadPorDevolver,
+              'precio': row['precio'],
+              'costo': row['costo'],
+              'estado': 'devuelto'
+            });
+            
+            cantidadPorDevolver = 0;
+          }
+        }
+      }
+    }
+  }
+
+  // Obtener detalles de una venta (para reimpresión profesional)
+  Future<List<Map<String, dynamic>>> obtenerDetallesVenta(int ventaId) async {
+    final db = await _db;
+    return await db.query('ventas_detalles', where: 'venta_id = ?', whereArgs: [ventaId]);
   }
 
   // --- BUSCAR HISTORIAL GENERAL ---
@@ -96,9 +194,9 @@ class HistoryDB {
     return await db.update('ventas_historial', {'cliente': nuevoNombre}, where: 'id = ?', whereArgs: [id]);
   }
 
-  Future<Map<String, dynamic>?> buscarVentaPorFolio(int folio) async {
+  Future<Map<String, dynamic>?> buscarVentaPorFolio(dynamic folio) async {
     final db = await _db;
-    final res = await db.query('ventas_historial', where: 'folio_venta = ?', whereArgs: [folio], limit: 1);
+    final res = await db.query('ventas_historial', where: 'folio_venta = ?', whereArgs: [folio.toString()], limit: 1);
     return res.isNotEmpty ? res.first : null;
   }
   // ... código existente ...

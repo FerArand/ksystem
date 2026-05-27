@@ -5,7 +5,7 @@ import 'package:mailer/smtp_server.dart';
 import 'constants/colores.dart';
 
 class FacturaForm extends StatefulWidget {
-  final int? ventaId;
+  final dynamic ventaId;
   final List<int>? ticketPdf;
   const FacturaForm({super.key, this.ventaId, this.ticketPdf});
 

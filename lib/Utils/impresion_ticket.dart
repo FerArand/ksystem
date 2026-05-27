@@ -2,7 +2,6 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:intl/intl.dart';
-import '../venta.dart';
 import 'formatters.dart';
 import '../models/pedido.dart';
 
@@ -100,7 +99,7 @@ class ImpresionTicket {
                       pw.Row(
                           mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                           children: [
-                            pw.Text('RECIBIDO:', style: const pw.TextStyle(fontSize: 7)),
+                            pw.Text('EFECTIVO:', style: const pw.TextStyle(fontSize: 7)),
                             pw.Text(Formatters.formatearMoneda(recibido), style: const pw.TextStyle(fontSize: 7)),
                           ]
                       ),
@@ -112,28 +111,20 @@ class ImpresionTicket {
                           ]
                       ),
                     ],
+
                     pw.Divider(borderStyle: pw.BorderStyle.dashed),
+
                     pw.Row(
                         mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                         children: [
-                          pw.Text('SALDO PENDIENTE:', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8)),
+                          pw.Text('SALDO RESTANTE:', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8)),
                           pw.Text(Formatters.formatearMoneda(saldoRestante), style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8)),
                         ]
                     ),
 
                     pw.SizedBox(height: 10),
-                    pw.Text('Conserve este comprobante', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 7)),
-                    
-                    pw.Divider(borderStyle: pw.BorderStyle.dashed),
-                    
-                    // DISCLAIMERS
-                    pw.Text('Este no es comprobante fiscal', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8)),
-                    pw.SizedBox(height: 5),
-                    pw.Text(
-                      '15 días de garantía por defecto de fábrica. No cubre daños por mala instalación o uso. En electrónicos no se aceptan cambios ni devoluciones.',
-                      textAlign: pw.TextAlign.center,
-                      style: const pw.TextStyle(fontSize: 6), 
-                    ),
+                    pw.Text('Gracias por su preferencia',
+                        style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 7)),
                     pw.SizedBox(height: 10 * PdfPageFormat.mm),
                   ]
               ),
@@ -144,7 +135,7 @@ class ImpresionTicket {
 
     await Printing.layoutPdf(
       onLayout: (PdfPageFormat format) async => doc.save(),
-      name: 'Abono_${nombreDeudor}_${DateFormat('yyyyMMdd').format(DateTime.now())}',
+      name: 'Abono_$nombreDeudor',
     );
   }
 
@@ -180,7 +171,7 @@ class ImpresionTicket {
                     pw.Text('KTOOLS',
                         style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 16)),
 
-                    pw.Text(isLiquidacion ? 'LIQUIDACIÓN DE PEDIDO' : 'COMPROBANTE DE APARTADO',
+                    pw.Text(isCopy ? (isLiquidacion ? 'COPIA LIQUIDACIÓN PEDIDO' : 'COPIA COMPROBANTE PEDIDO') : (isLiquidacion ? 'LIQUIDACIÓN DE PEDIDO' : 'COMPROBANTE DE PEDIDO'),
                         style: pw.TextStyle(fontSize: 7, fontWeight: pw.FontWeight.bold)),
 
                     pw.SizedBox(height: 2),
@@ -191,7 +182,7 @@ class ImpresionTicket {
                     pw.SizedBox(height: 5),
                     if (isCopy)
                       pw.Text('--- COPIA DEL ORIGINAL ---', style: pw.TextStyle(fontSize: 7, fontWeight: pw.FontWeight.bold)),
-
+                    
                     pw.Text(fecha, style: const pw.TextStyle(fontSize: 7)),
                     pw.Text('Cliente: ${pedido.clienteNombre}',
                         style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8)),
@@ -215,38 +206,48 @@ class ImpresionTicket {
                     pw.Row(
                         mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                         children: [
-                          pw.Text('Precio Público:', style: const pw.TextStyle(fontSize: 7)),
-                          pw.Text(Formatters.formatearMoneda(pedido.precioNormal), style: const pw.TextStyle(fontSize: 7)),
+                          pw.Text('PRECIO TOTAL:', style: const pw.TextStyle(fontSize: 7)),
+                          pw.Text(Formatters.formatearMoneda(pedido.precioApartado), style: const pw.TextStyle(fontSize: 7)),
                         ]
                     ),
-                    pw.Row(
-                        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                        children: [
-                          pw.Text('Descuento:', style: const pw.TextStyle(fontSize: 7)),
-                          pw.Text('${pedido.descuento.toStringAsFixed(1)}%', style: const pw.TextStyle(fontSize: 7)),
-                        ]
-                    ),
-                    pw.Row(
-                        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                        children: [
-                          pw.Text('Precio de Apartado:', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8)),
-                          pw.Text(Formatters.formatearMoneda(pedido.precioApartado), style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8)),
-                        ]
-                    ),
+                    
+                    if (!isLiquidacion) ...[
+                      pw.Row(
+                          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                          children: [
+                            pw.Text('ABONO INICIAL:', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8)),
+                            pw.Text(Formatters.formatearMoneda(montoPagadoMomento), style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8)),
+                          ]
+                      ),
+                      pw.Row(
+                          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                          children: [
+                            pw.Text('SALDO PENDIENTE:', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8)),
+                            pw.Text(Formatters.formatearMoneda(pedido.precioApartado - pedido.totalPagado), style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8)),
+                          ]
+                      ),
+                    ] else ...[
+                      pw.Row(
+                          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                          children: [
+                            pw.Text('TOTAL PAGADO:', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8)),
+                            pw.Text(Formatters.formatearMoneda(pedido.totalPagado), style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8)),
+                          ]
+                      ),
+                      pw.Row(
+                          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                          children: [
+                            pw.Text('ESTADO:', style: const pw.TextStyle(fontSize: 7)),
+                            pw.Text('LIQUIDADO', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 7, color: PdfColors.green)),
+                          ]
+                      ),
+                    ],
 
-                    pw.Divider(borderStyle: pw.BorderStyle.dashed),
-
+                    pw.SizedBox(height: 5),
                     pw.Row(
                         mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                         children: [
-                          pw.Text(isLiquidacion ? 'PAGO FINAL:' : 'ABONO INICIAL:', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8)),
-                          pw.Text(Formatters.formatearMoneda(montoPagadoMomento), style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8)),
-                        ]
-                    ),
-                    pw.Row(
-                        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                        children: [
-                          pw.Text('RECIBIDO:', style: const pw.TextStyle(fontSize: 7)),
+                          pw.Text('EFECTIVO RECIBIDO:', style: const pw.TextStyle(fontSize: 7)),
                           pw.Text(Formatters.formatearMoneda(recibido), style: const pw.TextStyle(fontSize: 7)),
                         ]
                     ),
@@ -258,36 +259,9 @@ class ImpresionTicket {
                         ]
                     ),
 
-                    pw.Divider(borderStyle: pw.BorderStyle.dashed),
-
-                    pw.Row(
-                        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                        children: [
-                          pw.Text('PAGADO TOTAL:', style: const pw.TextStyle(fontSize: 7)),
-                          pw.Text(Formatters.formatearMoneda(pedido.totalPagado), style: const pw.TextStyle(fontSize: 7)),
-                        ]
-                    ),
-                    pw.Row(
-                        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                        children: [
-                          pw.Text('SALDO PENDIENTE:', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8)),
-                          pw.Text(Formatters.formatearMoneda(pedido.precioApartado - pedido.totalPagado), style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8)),
-                        ]
-                    ),
-
                     pw.SizedBox(height: 10),
-                    pw.Text('Conserve este comprobante para su entrega', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 7)),
-                    
-                    pw.Divider(borderStyle: pw.BorderStyle.dashed),
-                    
-                    // DISCLAIMERS
-                    pw.Text('Este no es comprobante fiscal', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8)),
-                    pw.SizedBox(height: 5),
-                    pw.Text(
-                      '15 días de garantía por defecto de fábrica. No cubre daños por mala instalación o uso. En electrónicos no se aceptan cambios ni devoluciones.',
-                      textAlign: pw.TextAlign.center,
-                      style: const pw.TextStyle(fontSize: 6), 
-                    ),
+                    pw.Text('Gracias por su preferencia',
+                        style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 7)),
                     pw.SizedBox(height: 10 * PdfPageFormat.mm),
                   ]
               ),
@@ -303,18 +277,28 @@ class ImpresionTicket {
   }
   
   static Future<void> imprimirTicket({
-    required List<ItemVenta> items,
+    required List<modelo.ItemVenta> items,
     required double total,
     required double recibido,
     required double cambio,
-    required int folioVenta,
-    String? fechaOriginal, // Nuevo parámetro opcional
+    required dynamic folioVenta,
+    String? fechaOriginal, 
     bool isCopy = false,
+    String? nombreCliente,
+    List<modelo.ItemVenta>? itemsDevueltos, 
   }) async {
     
     final doc = pw.Document();
     final fechaActual = DateFormat('dd/MM/yyyy HH:mm').format(DateTime.now());
     final fechaMostrar = fechaOriginal ?? fechaActual;
+
+    // Calcular total devuelto si existe
+    double montoDevueltoTotal = 0;
+    if (itemsDevueltos != null) {
+      for (var item in itemsDevueltos) {
+        montoDevueltoTotal += (item.precio * item.cantidad);
+      }
+    }
 
     const PdfPageFormat formatoTicket = PdfPageFormat(
       58 * PdfPageFormat.mm, 
@@ -338,7 +322,9 @@ class ImpresionTicket {
                 pw.Text('KTOOLS', 
                     style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 16)),
                 
-                pw.Text(isCopy ? 'COPIA - FERREELÉCTRICA' : 'FERREELÉCTRICA', 
+                pw.Text(isCopy 
+                    ? (nombreCliente != null ? 'COPIA - VENTA A CRÉDITO' : 'COPIA - FERREELÉCTRICA')
+                    : (nombreCliente != null ? 'VENTA A CRÉDITO' : 'FERREELÉCTRICA'), 
                     style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
                 
                 pw.SizedBox(height: 2),
@@ -346,8 +332,13 @@ class ImpresionTicket {
                     textAlign: pw.TextAlign.center,
                     style: const pw.TextStyle(fontSize: 6)),
 
+                if (itemsDevueltos != null || folioVenta.toString().endsWith('M')) ...[
+                  pw.SizedBox(height: 2),
+                  pw.Text('Ticket de devolución', style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold)),
+                ],
+
                 pw.SizedBox(height: 5),
-                if (isCopy)
+                if (isCopy && !(itemsDevueltos != null || folioVenta.toString().endsWith('M')))
                   pw.Text('--- COPIA DEL ORIGINAL ---', style: pw.TextStyle(fontSize: 7, fontWeight: pw.FontWeight.bold)),
 
                 if (fechaOriginal != null) 
@@ -355,6 +346,10 @@ class ImpresionTicket {
                 
                 pw.Text(fechaMostrar, style: const pw.TextStyle(fontSize: 7)),
                 
+                if (nombreCliente != null)
+                  pw.Text('Cliente: $nombreCliente',
+                      style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8)),
+
                 pw.Text('Folio Venta: #$folioVenta', 
                     style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 7)),
                 
@@ -371,21 +366,40 @@ class ImpresionTicket {
                 ),
                 pw.SizedBox(height: 4),
 
-                // ITEMS
+                // ITEMS ACTUALES
                 ...items.map((item) {
-                  final subtotal = item.producto.precio * item.cantidad;
+                  final subtotal = item.precio * item.cantidad;
                   return pw.Padding(
                     padding: const pw.EdgeInsets.only(bottom: 2),
                     child: pw.Row(
                       crossAxisAlignment: pw.CrossAxisAlignment.start,
                       children: [
                         pw.Expanded(flex: 1, child: pw.Text('${item.cantidad}', style: const pw.TextStyle(fontSize: 6))),
-                        pw.Expanded(flex: 3, child: pw.Text(item.producto.descripcion, maxLines: 2, style: const pw.TextStyle(fontSize: 6))),
+                        pw.Expanded(flex: 3, child: pw.Text(item.descripcion, maxLines: 2, style: const pw.TextStyle(fontSize: 6))),
                         pw.Expanded(flex: 1, child: pw.Text(Formatters.formatearMoneda(subtotal), textAlign: pw.TextAlign.right, style: const pw.TextStyle(fontSize: 6))),
                       ]
                     )
                   );
                 }).toList(),
+
+                if (itemsDevueltos != null && itemsDevueltos.isNotEmpty) ...[
+                  pw.SizedBox(height: 5),
+                  pw.Text('PRODUCTOS DEVUELTOS:', style: pw.TextStyle(fontSize: 7, fontWeight: pw.FontWeight.bold)),
+                  ...itemsDevueltos.map((item) {
+                    final subtotal = item.precio * item.cantidad;
+                    return pw.Padding(
+                      padding: const pw.EdgeInsets.only(bottom: 2),
+                      child: pw.Row(
+                        crossAxisAlignment: pw.CrossAxisAlignment.start,
+                        children: [
+                          pw.Expanded(flex: 1, child: pw.Text('${item.cantidad}', style: const pw.TextStyle(fontSize: 6))),
+                          pw.Expanded(flex: 3, child: pw.Text(item.descripcion, maxLines: 2, style: const pw.TextStyle(fontSize: 6, decoration: pw.TextDecoration.lineThrough))),
+                          pw.Expanded(flex: 1, child: pw.Text('-${Formatters.formatearMoneda(subtotal)}', textAlign: pw.TextAlign.right, style: const pw.TextStyle(fontSize: 6))),
+                        ]
+                      )
+                    );
+                  }).toList(),
+                ],
 
                 pw.Divider(borderStyle: pw.BorderStyle.dashed),
 
@@ -393,7 +407,7 @@ class ImpresionTicket {
                 pw.Row(
                   mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                   children: [
-                    pw.Text('TOTAL:', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 9)),
+                    pw.Text('TOTAL ACTUAL:', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 9)),
                     pw.Text(Formatters.formatearMoneda(total), style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 9)),
                   ]
                 ),
@@ -401,15 +415,24 @@ class ImpresionTicket {
                 pw.Row(
                     mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                     children: [
-                      pw.Text('Recibido:', style: const pw.TextStyle(fontSize: 7)),
+                      pw.Text('Recibido original:', style: const pw.TextStyle(fontSize: 7)),
                       pw.Text(Formatters.formatearMoneda(recibido), style: const pw.TextStyle(fontSize: 7)),
                     ]
                 ),
+                if (itemsDevueltos != null || folioVenta.toString().endsWith('M')) ...[
+                  pw.Row(
+                      mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                      children: [
+                        pw.Text('Monto devuelto:', style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
+                        pw.Text(Formatters.formatearMoneda(montoDevueltoTotal), style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
+                      ]
+                  ),
+                ],
                 pw.Row(
                     mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                     children: [
-                      pw.Text('Cambio:', style: const pw.TextStyle(fontSize: 7)),
-                      pw.Text(Formatters.formatearMoneda(cambio), style: const pw.TextStyle(fontSize: 7)),
+                      pw.Text('Cambio Original:', style: pw.TextStyle(fontSize: 6)),
+                      pw.Text(Formatters.formatearMoneda(cambio), style: pw.TextStyle(fontSize: 6)),
                     ]
                 ),
 
@@ -446,16 +469,26 @@ class ImpresionTicket {
   }
 
   static Future<List<int>> generarPdfTicket({
-    required List<ItemVenta> items,
+    required List<modelo.ItemVenta> items,
     required double total,
     required double recibido,
     required double cambio,
-    required int folioVenta,
+    required dynamic folioVenta,
     String? fechaOriginal,
+    String? nombreCliente,
+    List<modelo.ItemVenta>? itemsDevueltos,
   }) async {
     final doc = pw.Document();
     final fechaActual = DateFormat('dd/MM/yyyy HH:mm').format(DateTime.now());
     final fechaMostrar = fechaOriginal ?? fechaActual;
+
+    // Calcular total devuelto si existe
+    double montoDevueltoTotal = 0;
+    if (itemsDevueltos != null) {
+      for (var item in itemsDevueltos) {
+        montoDevueltoTotal += (item.precio * item.cantidad);
+      }
+    }
 
     const PdfPageFormat formatoTicket = PdfPageFormat(
         58 * PdfPageFormat.mm,
@@ -478,7 +511,7 @@ class ImpresionTicket {
                     pw.Text('KTOOLS',
                         style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 16)),
 
-                    pw.Text('FERREELÉCTRICA',
+                    pw.Text(nombreCliente != null ? 'VENTA A CRÉDITO' : 'FERREELÉCTRICA',
                         style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
 
                     pw.SizedBox(height: 2),
@@ -486,11 +519,20 @@ class ImpresionTicket {
                         textAlign: pw.TextAlign.center,
                         style: const pw.TextStyle(fontSize: 6)),
 
+                    if (itemsDevueltos != null || folioVenta.toString().endsWith('M')) ...[
+                      pw.SizedBox(height: 2),
+                      pw.Text('Ticket de devolución', style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold)),
+                    ],
+
                     pw.SizedBox(height: 5),
                     if (fechaOriginal != null)
                       pw.Text('FECHA ORIGINAL:', style: pw.TextStyle(fontSize: 7, fontWeight: pw.FontWeight.bold)),
 
                     pw.Text(fechaMostrar, style: const pw.TextStyle(fontSize: 7)),
+
+                    if (nombreCliente != null)
+                      pw.Text('Cliente: $nombreCliente',
+                          style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8)),
 
                     pw.Text('Folio Venta: #$folioVenta',
                         style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 7)),
@@ -508,26 +550,45 @@ class ImpresionTicket {
                     pw.SizedBox(height: 4),
 
                     ...items.map((item) {
-                      final subtotal = item.producto.precio * item.cantidad;
+                      final subtotal = item.precio * item.cantidad;
                       return pw.Padding(
                           padding: const pw.EdgeInsets.only(bottom: 2),
                           child: pw.Row(
                               crossAxisAlignment: pw.CrossAxisAlignment.start,
                               children: [
                                 pw.Expanded(flex: 1, child: pw.Text('${item.cantidad}', style: const pw.TextStyle(fontSize: 6))),
-                                pw.Expanded(flex: 3, child: pw.Text(item.producto.descripcion, maxLines: 2, style: const pw.TextStyle(fontSize: 6))),
+                                pw.Expanded(flex: 3, child: pw.Text(item.descripcion, maxLines: 2, style: const pw.TextStyle(fontSize: 6))),
                                 pw.Expanded(flex: 1, child: pw.Text('\$${subtotal.toStringAsFixed(2)}', textAlign: pw.TextAlign.right, style: const pw.TextStyle(fontSize: 6))),
                               ]
                           )
                       );
                     }).toList(),
 
+                    if (itemsDevueltos != null && itemsDevueltos.isNotEmpty) ...[
+                      pw.SizedBox(height: 5),
+                      pw.Text('PRODUCTOS DEVUELTOS:', style: pw.TextStyle(fontSize: 7, fontWeight: pw.FontWeight.bold)),
+                      ...itemsDevueltos.map((item) {
+                        final subtotal = item.precio * item.cantidad;
+                        return pw.Padding(
+                            padding: const pw.EdgeInsets.only(bottom: 2),
+                            child: pw.Row(
+                                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                                children: [
+                                  pw.Expanded(flex: 1, child: pw.Text('${item.cantidad}', style: const pw.TextStyle(fontSize: 6))),
+                                  pw.Expanded(flex: 3, child: pw.Text(item.descripcion, maxLines: 2, style: const pw.TextStyle(fontSize: 6, decoration: pw.TextDecoration.lineThrough))),
+                                  pw.Expanded(flex: 1, child: pw.Text('-\$${subtotal.toStringAsFixed(2)}', textAlign: pw.TextAlign.right, style: const pw.TextStyle(fontSize: 6))),
+                                ]
+                            )
+                        );
+                      }).toList(),
+                    ],
+
                     pw.Divider(borderStyle: pw.BorderStyle.dashed),
 
                     pw.Row(
                         mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                         children: [
-                          pw.Text('TOTAL:', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 9)),
+                          pw.Text('TOTAL ACTUAL:', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 9)),
                           pw.Text('\$${total.toStringAsFixed(2)}', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 9)),
                         ]
                     ),
@@ -535,15 +596,24 @@ class ImpresionTicket {
                     pw.Row(
                         mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                         children: [
-                          pw.Text('Recibido:', style: const pw.TextStyle(fontSize: 7)),
+                          pw.Text('Recibido original:', style: const pw.TextStyle(fontSize: 7)),
                           pw.Text('\$${recibido.toStringAsFixed(2)}', style: const pw.TextStyle(fontSize: 7)),
                         ]
                     ),
+                    if (itemsDevueltos != null || folioVenta.toString().endsWith('M')) ...[
+                      pw.Row(
+                          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                          children: [
+                            pw.Text('Monto reintegrado:', style: pw.TextStyle(fontSize: 7, fontWeight: pw.FontWeight.bold, color: PdfColors.red)),
+                            pw.Text('\$${montoDevueltoTotal.toStringAsFixed(2)}', style: pw.TextStyle(fontSize: 7, fontWeight: pw.FontWeight.bold, color: PdfColors.red)),
+                          ]
+                      ),
+                    ],
                     pw.Row(
                         mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                         children: [
-                          pw.Text('Cambio:', style: const pw.TextStyle(fontSize: 7)),
-                          pw.Text('\$${cambio.toStringAsFixed(2)}', style: const pw.TextStyle(fontSize: 7)),
+                          pw.Text('CAMBIO:', style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold)),
+                          pw.Text('\$${cambio.toStringAsFixed(2)}', style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold)),
                         ]
                     ),
 

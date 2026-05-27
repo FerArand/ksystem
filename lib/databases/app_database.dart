@@ -22,7 +22,7 @@ class AppDatabase {
     // version: 4 para soportar ubicacion en productos
     return await openDatabase(
       path,
-      version: 5,
+      version: 6,
       onCreate: _createDB,
       onUpgrade: onUpgrade,
     );
@@ -56,6 +56,20 @@ class AppDatabase {
             fecha_creacion TEXT,
             fecha_entrega TEXT,
             estado TEXT
+          )
+        ''');
+      }
+      if (oldVersion < 6) {
+        await db.execute('''
+          CREATE TABLE ventas_detalles (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            venta_id INTEGER,
+            sku TEXT,
+            descripcion TEXT,
+            cantidad INTEGER,
+            precio REAL,
+            costo REAL,
+            estado TEXT DEFAULT 'activo'
           )
         ''');
       }

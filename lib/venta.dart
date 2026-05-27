@@ -263,8 +263,17 @@ class _VentaState extends State<Venta> {
 
     // 4. Imprimir y Limpiar
     try {
+      // Convertimos _carrito a la lista de modelo.ItemVenta que espera el ticket
+      final itemsParaTicket = _carrito.map((e) => modelo.ItemVenta(
+        sku: e.producto.codigo,
+        descripcion: e.producto.descripcion,
+        cantidad: e.cantidad,
+        precio: e.producto.precio,
+        costo: e.producto.costo
+      )).toList();
+
       await ImpresionTicket.imprimirTicket(
-          items: _carrito,
+          items: itemsParaTicket,
           total: _total,
           recibido: _recibido,
           cambio: (_recibido - _total),
@@ -277,8 +286,16 @@ class _VentaState extends State<Venta> {
     if (!mounted) return;
 
     // GENERAR PDF PARA EL FORMULARIO (Si elige facturar)
+    final itemsParaPdf = _carrito.map((e) => modelo.ItemVenta(
+        sku: e.producto.codigo,
+        descripcion: e.producto.descripcion,
+        cantidad: e.cantidad,
+        precio: e.producto.precio,
+        costo: e.producto.costo
+    )).toList();
+
     final ticketPdf = await ImpresionTicket.generarPdfTicket(
-        items: _carrito,
+        items: itemsParaPdf,
         total: _total,
         recibido: _recibido,
         cambio: (_recibido - _total),
@@ -388,7 +405,7 @@ class _VentaState extends State<Venta> {
                   
                   // Registramos una venta de "Fiado" con 0 liquidez pero con el costo total
                   // Esto permite que el calendario reste el costo de la ganancia del día
-                  await HistoryDB.instance.registrarVenta(
+                  int ventaId = await HistoryDB.instance.registrarVenta(
                     fecha: fecha,
                     total: 0, // No hay ingreso de dinero aún
                     costoTotal: costoTotalVenta,
@@ -400,6 +417,28 @@ class _VentaState extends State<Venta> {
 
                   for (var item in _carrito) {
                     await DBHelper.instance.updateStock(item.producto.codigo, -item.cantidad);
+                  }
+
+                  // 3. Imprimir Ticket de Deuda
+                  try {
+                    final itemsDeudaParaTicket = _carrito.map((e) => modelo.ItemVenta(
+                      sku: e.producto.codigo,
+                      descripcion: e.producto.descripcion,
+                      cantidad: e.cantidad,
+                      precio: e.producto.precio,
+                      costo: e.producto.costo
+                    )).toList();
+
+                    await ImpresionTicket.imprimirTicket(
+                        items: itemsDeudaParaTicket,
+                        total: _total,
+                        recibido: 0,
+                        cambio: 0,
+                        folioVenta: ventaId,
+                        nombreCliente: nombre
+                    );
+                  } catch (e) {
+                    debugPrint("Error al imprimir ticket de deuda: $e");
                   }
 
                   if (mounted) {

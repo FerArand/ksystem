@@ -5,9 +5,7 @@ import 'databases/history_db.dart';
 import 'db_helper.dart';
 import 'constants/colores.dart';
 import 'Utils/impresion_ticket.dart';
-import 'models/producto.dart';
 import 'models/pedido.dart';
-import 'venta.dart';
 import 'factura_form.dart';
 import 'models/item_venta.dart' as modelo;
 import 'databases/app_database.dart';
@@ -28,8 +26,6 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
   // Datos estadísticos
   String _mejorProductoMes = "Calculando...";
   String _datoDestacado = "...";
-  String _topProductoNombre = "---";
-  int _topProductoCant = 0;
 
   bool _cargando = false;
 
@@ -40,7 +36,7 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
   }
 
   Future<void> _cargarDatosMes(DateTime fecha) async {
-    setState(() { _cargando = true; _datosDias.clear(); _topProductoNombre = "---"; });
+    setState(() { _cargando = true; _datosDias.clear(); });
 
     // 1. CALCULAR RANGO DEL CALENDARIO (Para semanas completas)
     int year = fecha.year;
@@ -86,49 +82,12 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
       }
     }
 
-    // 3. OBTENER PRODUCTO TOP DEL MES
-    final db = await AppDatabase.instance.database;
-    final mesStr = fecha.month.toString().padLeft(2, '0');
-    final anioStr = fecha.year.toString();
-
-    final rawTickets = await db.query('ventas_historial',
-        columns: ['items'],
-        where: "fecha LIKE ? AND es_activo = 1",
-        whereArgs: ['$anioStr-$mesStr%']);
-
-    Map<String, int> conteoProductos = {};
-    for (var t in rawTickets) {
-      String itemsStr = t['items'] as String? ?? "";
-      final listaItems = modelo.ItemVenta.listaDesdeString(itemsStr);
-
-      for (var item in listaItems) {
-        if (conteoProductos.containsKey(item.descripcion)) {
-          conteoProductos[item.descripcion] = conteoProductos[item.descripcion]! + item.cantidad;
-        } else {
-          conteoProductos[item.descripcion] = item.cantidad;
-        }
-      }
-    }
-
-    String nombreTop = "Sin datos";
-    int cantTop = 0;
-    if (conteoProductos.isNotEmpty) {
-      var sortedKeys = conteoProductos.keys.toList(growable: false)
-        ..sort((k1, k2) => conteoProductos[k2]!.compareTo(conteoProductos[k1]!));
-      if (sortedKeys.isNotEmpty) {
-        nombreTop = sortedKeys.first;
-        cantTop = conteoProductos[nombreTop]!;
-      }
-    }
-
     if (!mounted) return;
 
     setState(() {
       _datosDias = temp;
       _mejorProductoMes = maxVenta > 0 ? "Día récord: $diaMejor" : "Sin ventas";
       _datoDestacado = Formatters.formatearMoneda(maxVenta);
-      _topProductoNombre = nombreTop;
-      _topProductoCant = cantTop;
       _fechaActual = fecha;
       _totalDiasGrid = calculoGrid;
       _cargando = false;
@@ -140,9 +99,214 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
     _cargarDatosMes(nueva);
   }
 
-  Future<void> _reimprimir(Map<String, dynamic> ticketData) async {
+  void _mostrarDialogoDevolucion(Map<String, dynamic> ticketData) async {
+    final String itemsString = ticketData['items'] ?? "[]";
+    final List<modelo.ItemVenta> itemsOriginales = modelo.ItemVenta.listaDesdeString(itemsString);
+    
+    // Mapa para rastrear cuántos se van a devolver de cada uno
+    // Key: index o descripción+sku para mayor seguridad
+    Map<int, int> cantidadesDevolver = {};
+    for(int i=0; i<itemsOriginales.length; i++) {
+      cantidadesDevolver[i] = 0;
+    }
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setInnerState) {
+          // Calcular el total a devolver en tiempo real
+          double totalADevolver = 0;
+          for (int i = 0; i < itemsOriginales.length; i++) {
+            totalADevolver += (itemsOriginales[i].precio * cantidadesDevolver[i]!);
+          }
+
+          return AlertDialog(
+            title: Text("Devolución - Folio #${ticketData['folio_venta']}"),
+            content: SizedBox(
+              width: 500,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text("Selecciona la cantidad de productos a devolver:", style: TextStyle(fontWeight: FontWeight.bold)),
+                  const Divider(),
+                  Flexible(
+                    child: ListView.builder(
+                      shrinkWrap: true,
+                      itemCount: itemsOriginales.length,
+                      itemBuilder: (c, i) {
+                        final item = itemsOriginales[i];
+                        return ListTile(
+                          title: Text(item.descripcion, style: const TextStyle(fontSize: 14)),
+                          subtitle: Text("Original: ${item.cantidad} • Precio: ${Formatters.formatearMoneda(item.precio)}"),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                icon: const Icon(Icons.remove_circle_outline),
+                                onPressed: cantidadesDevolver[i]! > 0 
+                                    ? () => setInnerState(() => cantidadesDevolver[i] = cantidadesDevolver[i]! - 1) 
+                                    : null,
+                              ),
+                              Text("${cantidadesDevolver[i]}", style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                              IconButton(
+                                icon: const Icon(Icons.add_circle_outline),
+                                onPressed: cantidadesDevolver[i]! < item.cantidad 
+                                    ? () => setInnerState(() => cantidadesDevolver[i] = cantidadesDevolver[i]! + 1) 
+                                    : null,
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  const Divider(),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8.0),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text("Total a reintegrar:", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                        Text(
+                          Formatters.formatearMoneda(totalADevolver),
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: Colors.green),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancelar")),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+                onPressed: totalADevolver == 0 
+                    ? null 
+                    : () async {
+                        Navigator.pop(ctx);
+                        await _ejecutarDevolucion(ticketData, itemsOriginales, cantidadesDevolver);
+                      },
+                child: const Text("Confirmar Devolución"),
+              )
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Future<void> _ejecutarDevolucion(Map<String, dynamic> ticketData, List<modelo.ItemVenta> itemsOriginales, Map<int, int> cantidadesDevolver) async {
+    setState(() => _cargando = true);
+    try {
+      List<modelo.ItemVenta> itemsRestantes = [];
+      List<modelo.ItemVenta> itemsDevueltosEfectivos = [];
+      double nuevoTotal = 0;
+      double nuevoCosto = 0;
+
+      for (int i = 0; i < itemsOriginales.length; i++) {
+        final item = itemsOriginales[i];
+        int devueltos = cantidadesDevolver[i]!;
+        int quedan = item.cantidad - devueltos;
+
+        if (devueltos > 0) {
+          // Devolver al stock
+          await DBHelper.instance.updateStock(item.sku, devueltos);
+          itemsDevueltosEfectivos.add(modelo.ItemVenta(
+            sku: item.sku,
+            descripcion: item.descripcion,
+            cantidad: devueltos,
+            precio: item.precio,
+            costo: item.costo
+          ));
+        }
+
+        if (quedan > 0) {
+          itemsRestantes.add(modelo.ItemVenta(
+            sku: item.sku,
+            descripcion: item.descripcion,
+            cantidad: quedan,
+            precio: item.precio,
+            costo: item.costo
+          ));
+          nuevoTotal += (item.precio * quedan);
+          nuevoCosto += (item.costo * quedan);
+        }
+      }
+
+      String folioOriginalStr = ticketData['folio_venta'].toString();
+      String nuevoFolio = folioOriginalStr.endsWith('M') ? folioOriginalStr : "${folioOriginalStr}M";
+      String nuevosItemsJson = modelo.ItemVenta.listaAJson(itemsRestantes);
+      
+      // Mapear devueltos para el registro detallado
+      List<Map<String, dynamic>> devueltosDetalle = itemsDevueltosEfectivos.map((e) => e.toJson()).toList();
+
+      await HistoryDB.instance.actualizarVentaModificada(
+        id: ticketData['id'],
+        nuevoTotal: nuevoTotal,
+        nuevoCosto: nuevoCosto,
+        nuevosItems: nuevosItemsJson,
+        itemsDevueltos: devueltosDetalle,
+        nuevoFolioDisplay: nuevoFolio
+      );
+
+      // Recargar datos para ver reflejado el cambio
+      await _cargarDatosMes(_fechaActual);
+
+      if (!mounted) return;
+      
+      // Ofrecer reimpresión
+      final nuevaVentaData = Map<String, dynamic>.from(ticketData);
+      nuevaVentaData['total'] = nuevoTotal;
+      nuevaVentaData['costo_total'] = nuevoCosto;
+      nuevaVentaData['items'] = nuevosItemsJson;
+      nuevaVentaData['folio_venta'] = nuevoFolio;
+
+      // Imprimir directamente
+      await _reimprimir(nuevaVentaData, itemsDevueltos: itemsDevueltosEfectivos);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Devolución Exitosa. Imprimiendo ticket #$nuevoFolio..."),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error en devolución: $e")));
+    } finally {
+      if (mounted) setState(() => _cargando = false);
+    }
+  }
+
+  Future<void> _reimprimir(Map<String, dynamic> ticketData, {List<modelo.ItemVenta>? itemsDevueltos}) async {
     try {
       final String cliente = ticketData['cliente']?.toString() ?? "";
+      
+      // Cargar detalles reales de la base de datos para mostrar devoluciones profesionales
+      List<modelo.ItemVenta> itemsActivos = [];
+      List<modelo.ItemVenta> itemsDevueltosReal = itemsDevueltos ?? [];
+      
+      if (itemsDevueltos == null) {
+        final detalles = await HistoryDB.instance.obtenerDetallesVenta(ticketData['id']);
+        if (detalles.isNotEmpty) {
+          for (var d in detalles) {
+            final item = modelo.ItemVenta.fromJson(d);
+            if (d['estado'] == 'devuelto') {
+              itemsDevueltosReal.add(item);
+            } else {
+              itemsActivos.add(item);
+            }
+          }
+        } else {
+          // Fallback al JSON de la cabecera si no hay detalles (ventas viejas)
+          itemsActivos = _reconstruirItems(ticketData);
+        }
+      } else {
+        itemsActivos = _reconstruirItems(ticketData);
+      }
 
       if (cliente.startsWith('Apartado de:') || cliente.startsWith('Liquidación de apartado:')) {
         final String nombre = cliente.contains('Apartado de:') 
@@ -231,7 +395,6 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
         return;
       }
 
-      final itemsReconstruidos = _reconstruirItems(ticketData);
       double total = (ticketData['total'] is int) ? (ticketData['total'] as int).toDouble() : ticketData['total'];
       double recibido = ticketData['recibido'] != null
           ? ((ticketData['recibido'] is int) ? (ticketData['recibido'] as int).toDouble() : ticketData['recibido'])
@@ -239,17 +402,18 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
       double cambio = ticketData['cambio'] != null
           ? ((ticketData['cambio'] is int) ? (ticketData['cambio'] as int).toDouble() : ticketData['cambio'])
           : 0.0;
-      int folio = ticketData['folio_venta'] ?? ticketData['id'] ?? 0;
+      dynamic folio = ticketData['folio_venta'] ?? ticketData['id'] ?? 0;
       String fechaOriginal = ticketData['fecha'] ?? "";
 
       await ImpresionTicket.imprimirTicket(
-          items: itemsReconstruidos,
+          items: itemsActivos,
           total: total,
           recibido: recibido,
           cambio: cambio,
           folioVenta: folio,
           fechaOriginal: fechaOriginal,
           isCopy: true,
+          itemsDevueltos: itemsDevueltosReal.isEmpty ? null : itemsDevueltosReal,
       );
     } catch (e) {
       if (!mounted) return;
@@ -257,19 +421,9 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
     }
   }
 
-  List<ItemVenta> _reconstruirItems(Map<String, dynamic> ticketData) {
+  List<modelo.ItemVenta> _reconstruirItems(Map<String, dynamic> ticketData) {
     String itemsString = ticketData['items'] ?? "";
-    final itemsParseados = modelo.ItemVenta.listaDesdeString(itemsString);
-    List<ItemVenta> itemsReconstruidos = [];
-
-    for (var item in itemsParseados) {
-      Producto pDummy = Producto(
-          id: 0, codigo: "HIST", sku: item.sku, factura: "", ubicacion: "", descripcion: item.descripcion, marca: "",
-          stock: 0, costo: item.costo, precio: item.precio, precioRappi: 0, borrado: false
-      );
-      itemsReconstruidos.add(ItemVenta(producto: pDummy, cantidad: item.cantidad));
-    }
-    return itemsReconstruidos;
+    return modelo.ItemVenta.listaDesdeString(itemsString);
   }
 
   Future<void> _abrirFacturaDesdeHistorial(Map<String, dynamic> ticketData) async {
@@ -282,7 +436,7 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
       double cambio = ticketData['cambio'] != null
           ? ((ticketData['cambio'] is int) ? (ticketData['cambio'] as int).toDouble() : ticketData['cambio'])
           : 0.0;
-      int folio = ticketData['folio_venta'] ?? ticketData['id'] ?? 0;
+      dynamic folio = ticketData['folio_venta'] ?? ticketData['id'] ?? 0;
       String fechaOriginal = ticketData['fecha'] ?? "";
 
       final pdfBytes = await ImpresionTicket.generarPdfTicket(
@@ -566,93 +720,26 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
     );
   }
 
-  void _abrirDetalleDia(DateTime fecha, {int initialTab = 0}) async {
+  void _abrirDetalleDia(DateTime fecha, {int initialTab = 0, String? highlightFolio}) async {
     String fechaYmd = DateFormat('yyyy-MM-dd').format(fecha);
     List<Map<String, dynamic>> tickets = await HistoryDB.instance.obtenerVentasPorDia(fechaYmd);
-
-    double tVenta = 0, tCosto = 0;
-    for (var t in tickets) {
-      tVenta += (t['total'] ?? 0.0);
-      tCosto += (t['costo_total'] ?? 0.0);
-    }
 
     if (!mounted) return;
 
     showDialog(
-        context: context,
-        builder: (ctx) => LayoutBuilder(
-            builder: (context, constraints) {
-              // Lógica de móvil comentada para priorizar vista de Tablet/Escritorio
-              // bool isMobile = constraints.maxWidth < 700;
-              bool isMobile = false;
-              return Dialog(
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                child: SizedBox(
-                  width: 1000, height: 800,
-                  child: Column(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: const BoxDecoration(color: Colores.grisOscuro, borderRadius: BorderRadius.vertical(top: Radius.circular(10))),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Expanded(child: Text("Desglose del ${DateFormat('dd MMMM yyyy').format(fecha)}", style: TextStyle(color: Colors.white, fontSize: isMobile ? 16 : 20), overflow: TextOverflow.ellipsis)),
-                            IconButton(icon: const Icon(Icons.close, color: Colors.white), onPressed: () => Navigator.pop(ctx))
-                          ],
-                        ),
-                      ),
-                      Expanded(
-                        child: DefaultTabController(
-                          length: 2,
-                          initialIndex: initialTab,
-                          child: Column(
-                            children: [
-                              TabBar(
-                                labelColor: Colors.black, indicatorColor: Colores.azulPrincipal,
-                                tabs: [
-                                  Tab(icon: const Icon(Icons.inventory), text: isMobile ? "Prods" : "Productos Vendidos"),
-                                  Tab(icon: const Icon(Icons.receipt), text: isMobile ? "Tickets" : "Reimpresión de Tickets"),
-                                ],
-                              ),
-                              Expanded(child: TabBarView(children: [_buildResumenProductos(tickets), _buildListaTickets(tickets, isMobile)])),
-                            ],
-                          ),
-                        ),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.all(16),
-                        color: Colors.grey[100],
-                        child: isMobile
-                            ? Column(
-                          children: [
-                            Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [
-                              _infoBox("COSTO", tCosto, Colors.red, isMobile),
-                              const SizedBox(width: 20),
-                              _infoBox("LIQUIDEZ", tVenta, Colors.black, isMobile),
-                            ]),
-                            const Divider(),
-                            _infoBox("GANANCIA", tVenta - tCosto, Colors.green, isMobile),
-                          ],
-                        )
-                            : Row(
-                          mainAxisAlignment: MainAxisAlignment.end,
-                          children: [
-                            _infoBox("COSTO", tCosto, Colors.red),
-                            const SizedBox(width: 30),
-                            _infoBox("LIQUIDEZ", tVenta, Colors.black),
-                            const SizedBox(width: 30),
-                            const VerticalDivider(),
-                            _infoBox("GANANCIA", tVenta - tCosto, Colors.green),
-                          ],
-                        ),
-                      )
-                    ],
-                  ),
-                ),
-              );
-            }
-        )
+      context: context,
+      builder: (ctx) => _DetalleDiaDialogContent(
+        fecha: fecha,
+        tickets: tickets,
+        initialTab: initialTab,
+        highlightFolio: highlightFolio,
+        onFactura: _abrirFacturaDesdeHistorial,
+        onReimprimir: _reimprimir,
+        onDevolucion: _mostrarDialogoDevolucion,
+        buildResumenProductos: _buildResumenProductos,
+        buildListaTickets: _buildListaTickets,
+        infoBox: _infoBox,
+      ),
     );
   }
 
@@ -737,38 +824,19 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
   }
 
   void _mostrarBuscadorFolio() {
-    final TextEditingController folioCtrl = TextEditingController();
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text("Ingresa el Folio de Ticket"),
-        content: TextField(
-          controller: folioCtrl,
-          keyboardType: TextInputType.number,
-          autofocus: true,
-          decoration: const InputDecoration(
-            labelText: "Número de Folio",
-            hintText: "Ej. 217",
-            border: OutlineInputBorder(),
-          ),
-          onSubmitted: (v) => _ejecutarBusquedaFolio(v, ctx),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancelar")),
-          ElevatedButton(
-            onPressed: () => _ejecutarBusquedaFolio(folioCtrl.text, ctx),
-            child: const Text("Buscar"),
-          ),
-        ],
+      builder: (ctx) => _BuscadorFolioDialog(
+        onSearch: (v) => _ejecutarBusquedaFolio(v, ctx),
       ),
-    ).then((_) => folioCtrl.dispose());
+    );
   }
 
   Future<void> _ejecutarBusquedaFolio(String query, BuildContext dialogCtx) async {
-    int? folio = int.tryParse(query);
-    if (folio == null) return;
+    String cleanQuery = query.trim().toUpperCase();
+    if (cleanQuery.isEmpty) return;
 
-    final venta = await HistoryDB.instance.buscarVentaPorFolio(folio);
+    final venta = await HistoryDB.instance.buscarVentaPorFolio(cleanQuery);
 
     if (!mounted) return;
 
@@ -800,7 +868,7 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
 
     // 2. Abrir detalle del día en la pestaña de tickets (index 1)
     if (mounted) {
-      _abrirDetalleDia(fechaVenta, initialTab: 1);
+      _abrirDetalleDia(fechaVenta, initialTab: 1, highlightFolio: cleanQuery);
     }
   }
 
@@ -815,59 +883,113 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
   }
 
   // --- BITÁCORA DE TICKETS ---
-  Widget _buildListaTickets(List<Map<String, dynamic>> tickets, [bool isMobile = false]) {
+  Widget _buildListaTickets(List<Map<String, dynamic>> tickets, bool isMobile, {ScrollController? scrollCtrl, String? highlightFolio}) {
     if (tickets.isEmpty) return const Center(child: Text("No hay ventas registradas"));
     return ListView.separated(
+      controller: scrollCtrl,
       padding: const EdgeInsets.all(10),
       separatorBuilder: (c, i) => const Divider(),
       itemCount: tickets.length,
       itemBuilder: (ctx, i) {
         final t = tickets[i];
+        final String folioActual = (t['folio_venta'] ?? t['id']).toString();
+        final bool isHighlighted = highlightFolio != null && folioActual == highlightFolio;
+        
         final hora = t['fecha'].toString().split(' ')[1].substring(0, 5);
 
-        final itemsParseados = modelo.ItemVenta.listaDesdeString(t['items'] ?? "");
+        return FutureBuilder<List<Map<String, dynamic>>>(
+          future: HistoryDB.instance.obtenerDetallesVenta(t['id']),
+          builder: (context, snapshot) {
+            List<Widget> itemWidgets = [];
+            
+            if (t['cliente'].toString().startsWith('Abono a deuda de:')) {
+              itemWidgets = [
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(t['cliente'], style: const TextStyle(fontStyle: FontStyle.italic, color: Colors.blueGrey, fontWeight: FontWeight.bold, fontSize: 12)),
+                )
+              ];
+            } else if (snapshot.hasData && snapshot.data!.isNotEmpty) {
+              final detalles = snapshot.data!;
+              itemWidgets = detalles.take(isMobile ? 3 : 100).map((d) {
+                bool esDevuelto = d['estado'] == 'devuelto';
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 2),
+                  child: Row(
+                    children: [
+                      Text("${d['cantidad']}x ${d['descripcion']}", 
+                        style: TextStyle(
+                          fontSize: 12,
+                          decoration: esDevuelto ? TextDecoration.lineThrough : null,
+                          color: esDevuelto ? Colors.red[300] : Colors.black87
+                        ), 
+                        maxLines: 1, 
+                        overflow: TextOverflow.ellipsis
+                      ),
+                      if (esDevuelto) ...[
+                        const SizedBox(width: 5),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                          decoration: BoxDecoration(color: Colors.red[50], borderRadius: BorderRadius.circular(4), border: Border.all(color: Colors.red[200]!)),
+                          child: const Text("DEVUELTO", style: TextStyle(fontSize: 8, color: Colors.red, fontWeight: FontWeight.bold)),
+                        )
+                      ]
+                    ],
+                  ),
+                );
+              }).toList();
+              if (isMobile && detalles.length > 3) {
+                itemWidgets.add(Text("... y ${detalles.length - 3} más", style: const TextStyle(fontSize: 10, color: Colors.grey)));
+              }
+            } else {
+              // Fallback para ventas viejas
+              final itemsParseados = modelo.ItemVenta.listaDesdeString(t['items'] ?? "");
+              itemWidgets = itemsParseados.take(isMobile ? 2 : 100).map((item) {
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 2),
+                  child: Text("${item.cantidad}x ${item.descripcion}", style: const TextStyle(fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis),
+                );
+              }).toList();
+              if (isMobile && itemsParseados.length > 2) {
+                itemWidgets.add(Text("... y ${itemsParseados.length - 2} más", style: const TextStyle(fontSize: 10, color: Colors.grey)));
+              }
+            }
 
-        List<Widget> itemWidgets;
-
-        if (t['cliente'].toString().startsWith('Abono a deuda de:')) {
-          itemWidgets = [
-            Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Text(t['cliente'], style: const TextStyle(fontStyle: FontStyle.italic, color: Colors.blueGrey, fontWeight: FontWeight.bold, fontSize: 12)),
-            )
-          ];
-        } else {
-          itemWidgets = itemsParseados.take(isMobile ? 2 : 100).map((item) {
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 2),
-              child: Text("${item.cantidad}x ${item.descripcion}", style: const TextStyle(fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis),
-            );
-          }).toList();
-          if (isMobile && itemsParseados.length > 2) {
-            itemWidgets.add(Text("... y ${itemsParseados.length - 2} más", style: const TextStyle(fontSize: 10, color: Colors.grey)));
-          }
-        }
-
-        return ListTile(
-          leading: isMobile ? null : const CircleAvatar(backgroundColor: Colors.blueGrey, child: Icon(Icons.receipt, color: Colors.white)),
-          title: Text("Folio #${t['folio_venta'] ?? t['id']} • $hora hrs", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-          subtitle: Column(crossAxisAlignment: CrossAxisAlignment.start, children: itemWidgets),
-          trailing: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(Formatters.formatearMoneda(t['total'] ?? 0.0), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-              IconButton(
-                icon: const Icon(Icons.description, color: Colores.azulPrincipal, size: 20),
-                onPressed: () => _abrirFacturaDesdeHistorial(t),
-                visualDensity: VisualDensity.compact,
+            return Container(
+              decoration: isHighlighted ? BoxDecoration(
+                color: Colors.amber[50],
+                border: Border.all(color: Colors.orange, width: 2),
+                borderRadius: BorderRadius.circular(8)
+              ) : null,
+              child: ListTile(
+                leading: isMobile ? null : const CircleAvatar(backgroundColor: Colors.blueGrey, child: Icon(Icons.receipt, color: Colors.white)),
+                title: Text("Folio #$folioActual • $hora hrs", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                subtitle: Column(crossAxisAlignment: CrossAxisAlignment.start, children: itemWidgets),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(Formatters.formatearMoneda(t['total'] ?? 0.0), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                    IconButton(
+                      icon: const Icon(Icons.description, color: Colores.azulPrincipal, size: 20),
+                      onPressed: () => _abrirFacturaDesdeHistorial(t),
+                      visualDensity: VisualDensity.compact,
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.print, size: 20),
+                      onPressed: () => _reimprimir(t),
+                      visualDensity: VisualDensity.compact,
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.assignment_return, color: Colors.red, size: 20),
+                      onPressed: () => _mostrarDialogoDevolucion(t),
+                      visualDensity: VisualDensity.compact,
+                      tooltip: "Devolución",
+                    ),
+                  ],
+                ),
               ),
-              IconButton(
-                icon: const Icon(Icons.print, size: 20),
-                onPressed: () => _reimprimir(t),
-                visualDensity: VisualDensity.compact,
-              )
-            ],
-          ),
+            );
+          },
         );
       },
     );
@@ -877,6 +999,124 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
   Widget _buildResumenProductos(List<Map<String, dynamic>> tickets) {
     if (tickets.isEmpty) return const Center(child: Text("Sin datos"));
 
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: _obtenerListaConsolidada(tickets),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator(color: Colores.azulPrincipal));
+        }
+        
+        if (snapshot.hasError) {
+          return Center(child: Text("Error al cargar resumen: ${snapshot.error}"));
+        }
+
+        final lista = snapshot.data ?? [];
+        if (lista.isEmpty) return const Center(child: Text("Sin datos"));
+
+        return ListView.builder(
+          padding: const EdgeInsets.all(20),
+          itemCount: lista.length,
+          itemBuilder: (ctx, i) {
+            final item = lista[i];
+
+            if (item['es_abono'] == true) {
+              return Card(
+                margin: const EdgeInsets.only(bottom: 10),
+                child: ListTile(
+                  leading: const CircleAvatar(
+                      backgroundColor: Colors.green,
+                      child: Icon(Icons.payments, color: Colors.white)
+                  ),
+                  title: Text(item['nombre'], style: const TextStyle(fontWeight: FontWeight.bold)),
+                  subtitle: Text("INGRESO POR ABONO: ${Formatters.formatearMoneda(item['bruto'])}",
+                      style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green, fontSize: 16)),
+                ),
+              );
+            }
+
+            return FutureBuilder<Map<String, dynamic>?>(
+              future: _buscarProductoLive(item['nombre'], item['sku_historico']),
+              builder: (context, snap) {
+
+                String stock = "...";
+                String skuFinal = item['sku_historico'];
+                double costoFinal = 0.0;
+                double precioPublico = 0.0;
+
+                if (snap.hasData && snap.data != null) {
+                  final prodDB = snap.data!;
+                  stock = prodDB['stock'].toString();
+                  precioPublico = (prodDB['precio'] as num).toDouble();
+
+                  if (skuFinal.isEmpty || skuFinal == "N/A") {
+                    skuFinal = prodDB['sku'] ?? prodDB['codigo'] ?? "N/A";
+                  }
+
+                  if ((item['costo_acumulado'] as double) > 0) {
+                    costoFinal = item['costo_acumulado'];
+                  } else {
+                    double costoUnitarioReal = (prodDB['costo'] as num).toDouble();
+                    costoFinal = costoUnitarioReal * (item['cant'] as int);
+                  }
+                } else {
+                  costoFinal = item['costo_acumulado'];
+                }
+
+                double ventaFinal = (item['bruto'] as double);
+                if (ventaFinal == 0 && precioPublico > 0) {
+                  ventaFinal = precioPublico * (item['cant'] as int);
+                }
+
+                double ganancia = ventaFinal - costoFinal;
+                int cantDev = item['cant_devuelta'] ?? 0;
+
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 10),
+                  child: ListTile(
+                    leading: CircleAvatar(
+                        backgroundColor: Colores.azulPrincipal,
+                        child: Text("${item['cant']}", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold))
+                    ),
+                    title: Text(item['nombre'], style: const TextStyle(fontWeight: FontWeight.bold)),
+                    subtitle: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            _tag("SKU: $skuFinal", Colors.blue),
+                            const SizedBox(width: 10),
+                            _tag("AÚN QUEDAN: $stock", int.tryParse(stock) != null && int.parse(stock) < 5 ? Colors.red : Colors.orange),
+                            if (cantDev > 0) ...[
+                              const SizedBox(width: 10),
+                              _tag("DEVUELTOS: $cantDev", Colors.red),
+                            ],
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: Row(
+                            children: [
+                              _miniDato("COSTO", costoFinal, Colors.red),
+                              _miniDato("VENTA", ventaFinal, Colors.black),
+                              _miniDato("GANANCIA", ganancia, Colors.green),
+                            ],
+                          ),
+                        )
+                      ],
+                    ),
+                  ),
+                );
+              },
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<List<Map<String, dynamic>>> _obtenerListaConsolidada(List<Map<String, dynamic>> tickets) async {
     Map<String, dynamic> consolidado = {};
     Map<String, dynamic> abonos = {};
 
@@ -895,124 +1135,61 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
         continue;
       }
 
-      final itemsParseados = modelo.ItemVenta.listaDesdeString(t['items'] ?? "");
+      // Cargar detalles reales para incluir devoluciones con etiqueta
+      final detalles = await HistoryDB.instance.obtenerDetallesVenta(t['id']);
+      
+      if (detalles.isNotEmpty) {
+        for (var d in detalles) {
+          String key = "${d['descripcion']}_${d['sku']}";
+          bool esDevuelto = d['estado'] == 'devuelto';
 
-      for (var item in itemsParseados) {
-        String key = item.descripcion;
-
-        if (consolidado.containsKey(key)) {
-          consolidado[key]['cant'] += item.cantidad;
-          consolidado[key]['bruto'] += (item.precio * item.cantidad);
-          consolidado[key]['costo_acumulado'] = (consolidado[key]['costo_acumulado'] ?? 0.0) + (item.costo * item.cantidad);
-        } else {
-          consolidado[key] = {
-            'nombre': item.descripcion,
-            'sku_historico': item.sku,
-            'cant': item.cantidad,
-            'bruto': (item.precio * item.cantidad),
-            'costo_acumulado': (item.costo * item.cantidad)
-          };
+          if (consolidado.containsKey(key)) {
+            consolidado[key]['cant'] += d['cantidad'];
+            if (!esDevuelto) {
+              consolidado[key]['bruto'] += (d['precio'] * d['cantidad']);
+              consolidado[key]['costo_acumulado'] += (d['costo'] * d['cantidad']);
+            } else {
+              consolidado[key]['cant_devuelta'] = (consolidado[key]['cant_devuelta'] ?? 0) + d['cantidad'];
+            }
+          } else {
+            consolidado[key] = {
+              'nombre': d['descripcion'],
+              'sku_historico': d['sku'],
+              'cant': d['cantidad'],
+              'cant_devuelta': esDevuelto ? d['cantidad'] : 0,
+              'bruto': esDevuelto ? 0.0 : (d['precio'] * d['cantidad']),
+              'costo_acumulado': esDevuelto ? 0.0 : (d['costo'] * d['cantidad'])
+            };
+          }
+        }
+      } else {
+        // Fallback para ventas antiguas sin tabla de detalles
+        final itemsParseados = modelo.ItemVenta.listaDesdeString(t['items'] ?? "");
+        for (var item in itemsParseados) {
+          String key = "${item.descripcion}_${item.sku}";
+          if (consolidado.containsKey(key)) {
+            consolidado[key]['cant'] += item.cantidad;
+            consolidado[key]['bruto'] += (item.precio * item.cantidad);
+            consolidado[key]['costo_acumulado'] += (item.costo * item.cantidad);
+          } else {
+            consolidado[key] = {
+              'nombre': item.descripcion,
+              'sku_historico': item.sku,
+              'cant': item.cantidad,
+              'bruto': (item.precio * item.cantidad),
+              'costo_acumulado': (item.costo * item.cantidad)
+            };
+          }
         }
       }
     }
 
-    var lista = consolidado.values.toList()..addAll(abonos.values.toList());
-    lista.sort((a, b) => b['bruto'].compareTo(a['bruto']));
-
-    return ListView.builder(
-      padding: const EdgeInsets.all(20),
-      itemCount: lista.length,
-      itemBuilder: (ctx, i) {
-        final item = lista[i];
-
-        if (item['es_abono'] == true) {
-          return Card(
-            margin: const EdgeInsets.only(bottom: 10),
-            child: ListTile(
-              leading: const CircleAvatar(
-                  backgroundColor: Colors.green,
-                  child: Icon(Icons.payments, color: Colors.white)
-              ),
-              title: Text(item['nombre'], style: const TextStyle(fontWeight: FontWeight.bold)),
-              subtitle: Text("INGRESO POR ABONO: ${Formatters.formatearMoneda(item['bruto'])}",
-                  style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green, fontSize: 16)),
-            ),
-          );
-        }
-
-        return FutureBuilder<Map<String, dynamic>?>(
-          future: _buscarProductoLive(item['nombre'], item['sku_historico']),
-          builder: (context, snap) {
-
-            String stock = "...";
-            String skuFinal = item['sku_historico'];
-            double costoFinal = 0.0;
-            double precioPublico = 0.0;
-
-            if (snap.hasData && snap.data != null) {
-              final prodDB = snap.data!;
-              stock = prodDB['stock'].toString();
-              precioPublico = (prodDB['precio'] as num).toDouble();
-
-              if (skuFinal.isEmpty || skuFinal == "N/A") {
-                skuFinal = prodDB['sku'] ?? prodDB['codigo'] ?? "N/A";
-              }
-
-              if ((item['costo_acumulado'] as double) > 0) {
-                costoFinal = item['costo_acumulado'];
-              } else {
-                double costoUnitarioReal = (prodDB['costo'] as num).toDouble();
-                costoFinal = costoUnitarioReal * (item['cant'] as int);
-              }
-            } else {
-              costoFinal = item['costo_acumulado'];
-            }
-
-            double ventaFinal = (item['bruto'] as double);
-            if (ventaFinal == 0 && precioPublico > 0) {
-              ventaFinal = precioPublico * (item['cant'] as int);
-            }
-
-            double ganancia = ventaFinal - costoFinal;
-
-            return Card(
-              margin: const EdgeInsets.only(bottom: 10),
-              child: ListTile(
-                leading: CircleAvatar(
-                    backgroundColor: Colores.azulPrincipal,
-                    child: Text("${item['cant']}", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold))
-                ),
-                title: Text(item['nombre'], style: const TextStyle(fontWeight: FontWeight.bold)),
-                subtitle: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        _tag("SKU: $skuFinal", Colors.blue),
-                        const SizedBox(width: 10),
-                        _tag("AÚN QUEDAN: $stock", int.tryParse(stock) != null && int.parse(stock) < 5 ? Colors.red : Colors.orange),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Row(
-                        children: [
-                          _miniDato("COSTO", costoFinal, Colors.red),
-                          _miniDato("VENTA", ventaFinal, Colors.black),
-                          _miniDato("GANANCIA", ganancia, Colors.green),
-                        ],
-                      ),
-                    )
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
-    );
+    final List<Map<String, dynamic>> lista = [
+      ...consolidado.values.map((e) => Map<String, dynamic>.from(e)),
+      ...abonos.values.map((e) => Map<String, dynamic>.from(e)),
+    ];
+    lista.sort((a, b) => (b['bruto'] as num).compareTo(a['bruto'] as num));
+    return lista;
   }
 
   Future<Map<String, dynamic>?> _buscarProductoLive(String nombre, String? sku) async {
@@ -1044,3 +1221,214 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
     ),
   );
 }
+
+class _BuscadorFolioDialog extends StatefulWidget {
+  final Function(String) onSearch;
+  const _BuscadorFolioDialog({Key? key, required this.onSearch}) : super(key: key);
+
+  @override
+  State<_BuscadorFolioDialog> createState() => _BuscadorFolioDialogState();
+}
+
+class _BuscadorFolioDialogState extends State<_BuscadorFolioDialog> {
+  late TextEditingController _folioCtrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _folioCtrl = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _folioCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text("Ingresa el Folio de Ticket"),
+      content: TextField(
+        controller: _folioCtrl,
+        keyboardType: TextInputType.text,
+        textCapitalization: TextCapitalization.characters,
+        autofocus: true,
+        decoration: const InputDecoration(
+          labelText: "Número de Folio",
+          hintText: "Ej. 217 o 217M",
+          border: OutlineInputBorder(),
+        ),
+        onSubmitted: (v) => widget.onSearch(v),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancelar")),
+        ElevatedButton(
+          onPressed: () => widget.onSearch(_folioCtrl.text),
+          child: const Text("Buscar"),
+        ),
+      ],
+    );
+  }
+}
+
+class _DetalleDiaDialogContent extends StatefulWidget {
+  final DateTime fecha;
+  final List<Map<String, dynamic>> tickets;
+  final int initialTab;
+  final String? highlightFolio;
+  final Function(Map<String, dynamic>) onFactura;
+  final Function(Map<String, dynamic>) onReimprimir;
+  final Function(Map<String, dynamic>) onDevolucion;
+  final Widget Function(List<Map<String, dynamic>>) buildResumenProductos;
+  final Widget Function(List<Map<String, dynamic>>, bool, {ScrollController? scrollCtrl, String? highlightFolio}) buildListaTickets;
+  final Widget Function(String, double, Color, [bool]) infoBox;
+
+  const _DetalleDiaDialogContent({
+    required this.fecha,
+    required this.tickets,
+    required this.initialTab,
+    this.highlightFolio,
+    required this.onFactura,
+    required this.onReimprimir,
+    required this.onDevolucion,
+    required this.buildResumenProductos,
+    required this.buildListaTickets,
+    required this.infoBox,
+  });
+
+  @override
+  State<_DetalleDiaDialogContent> createState() => _DetalleDiaDialogContentState();
+}
+
+class _DetalleDiaDialogContentState extends State<_DetalleDiaDialogContent> {
+  late ScrollController _ticketScrollCtrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _ticketScrollCtrl = ScrollController();
+    if (widget.highlightFolio != null) {
+      _autoScroll();
+    }
+  }
+
+  void _autoScroll() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      int index = widget.tickets.indexWhere((t) => (t['folio_venta'] ?? t['id']).toString() == widget.highlightFolio);
+      if (index != -1) {
+        double offset = index * 73.0;
+        Future.delayed(const Duration(milliseconds: 300), () {
+          if (mounted && _ticketScrollCtrl.hasClients) {
+            _ticketScrollCtrl.animateTo(
+              offset,
+              duration: const Duration(milliseconds: 600),
+              curve: Curves.easeOutQuart,
+            );
+          }
+        });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _ticketScrollCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    double tVenta = 0, tCosto = 0;
+    for (var t in widget.tickets) {
+      tVenta += (t['total'] ?? 0.0);
+      tCosto += (t['costo_total'] ?? 0.0);
+    }
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        bool isMobile = false; // Priorizamos vista Desktop
+        return Dialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          child: SizedBox(
+            width: 1000, height: 800,
+            child: Column(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: const BoxDecoration(
+                    color: Colores.grisOscuro,
+                    borderRadius: BorderRadius.vertical(top: Radius.circular(10)),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          "Desglose del ${DateFormat('dd MMMM yyyy').format(widget.fecha)}",
+                          style: TextStyle(color: Colors.white, fontSize: isMobile ? 16 : 20),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close, color: Colors.white),
+                        onPressed: () => Navigator.pop(context),
+                      )
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: DefaultTabController(
+                    length: 2,
+                    initialIndex: widget.initialTab,
+                    child: Column(
+                      children: [
+                        TabBar(
+                          labelColor: Colors.black,
+                          indicatorColor: Colores.azulPrincipal,
+                          tabs: [
+                            Tab(icon: const Icon(Icons.inventory), text: isMobile ? "Prods" : "Productos Vendidos"),
+                            Tab(icon: const Icon(Icons.receipt), text: isMobile ? "Tickets" : "Reimpresión de Tickets"),
+                          ],
+                        ),
+                        Expanded(
+                          child: TabBarView(
+                            children: [
+                              widget.buildResumenProductos(widget.tickets),
+                              widget.buildListaTickets(
+                                widget.tickets,
+                                isMobile,
+                                scrollCtrl: _ticketScrollCtrl,
+                                highlightFolio: widget.highlightFolio,
+                              )
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  color: Colors.grey[100],
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      widget.infoBox("COSTO", tCosto, Colors.red),
+                      const SizedBox(width: 30),
+                      widget.infoBox("LIQUIDEZ", tVenta, Colors.black),
+                      const SizedBox(width: 30),
+                      const VerticalDivider(),
+                      widget.infoBox("GANANCIA", tVenta - tCosto, Colors.green),
+                    ],
+                  ),
+                )
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
