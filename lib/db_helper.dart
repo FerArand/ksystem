@@ -18,6 +18,24 @@ class DBHelper {
     return await db.insert('productos', row,
         conflictAlgorithm: ConflictAlgorithm.replace);
   }
+  Future<List<String>> getMarcasUnicas() async {
+    final db = await _db;
+    final res = await db.rawQuery('SELECT DISTINCT marca FROM productos WHERE marca IS NOT NULL AND marca != \'\' ORDER BY marca ASC');
+    return res.map((e) => e['marca'] as String).toList();
+  }
+
+  Future<int> ajustarPreciosMasivo(List<String> marcas, double aumentoCosto, double aumentoPrecio) async {
+    if (marcas.isEmpty) return 0;
+    final db = await _db;
+    final marcasPlaceholders = List.filled(marcas.length, '?').join(',');
+
+    return await db.rawUpdate('''
+      UPDATE productos 
+      SET costo = ROUND(costo * (1.0 + ? / 100.0), 2),
+          precio = ROUND(precio * (1.0 + ? / 100.0), 2)
+      WHERE marca IN ($marcasPlaceholders)
+    ''', [aumentoCosto, aumentoPrecio, ...marcas]);
+  }
   // NUEVO: Lógica de negocio encapsulada para búsquedas manuales
   Future<List<Producto>> buscarParaSeleccionManual(String query) async {
     if (query.isEmpty) return [];
