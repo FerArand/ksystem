@@ -371,7 +371,7 @@ class _InicioState extends State<Inicio> {
             padding: EdgeInsets.only(left: 20, bottom: 20),
             child: Align(
               alignment: Alignment.centerLeft,
-              child: Text("v2.3.1", style: TextStyle(color: Colors.white30, fontSize: 12, fontWeight: FontWeight.bold)),
+              child: Text("v2.4.0", style: TextStyle(color: Colors.white30, fontSize: 12, fontWeight: FontWeight.bold)),
             ),
           )
         ],
