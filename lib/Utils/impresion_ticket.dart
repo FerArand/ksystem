@@ -87,8 +87,8 @@ class ImpresionTicket {
                     pw.Row(
                         mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                         children: [
-                          pw.Text('IVA Calculado:', style: const pw.TextStyle(fontSize: 7)),
-                          pw.Text(Formatters.formatearMoneda(deudaAnterior * 0.16), style: const pw.TextStyle(fontSize: 7)),
+                          pw.Text('IVA:', style: const pw.TextStyle(fontSize: 7)),
+                          pw.Text(Formatters.formatearMoneda(deudaAnterior - (deudaAnterior / 1.16)), style: const pw.TextStyle(fontSize: 7)),
                         ]
                     ),
 
@@ -222,8 +222,8 @@ class ImpresionTicket {
                     pw.Row(
                         mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                         children: [
-                          pw.Text('IVA Calculado:', style: const pw.TextStyle(fontSize: 7)),
-                          pw.Text(Formatters.formatearMoneda(pedido.precioApartado * 0.16), style: const pw.TextStyle(fontSize: 7)),
+                          pw.Text('IVA:', style: const pw.TextStyle(fontSize: 7)),
+                          pw.Text(Formatters.formatearMoneda(pedido.precioApartado - (pedido.precioApartado / 1.16)), style: const pw.TextStyle(fontSize: 7)),
                         ]
                     ),
 
@@ -434,8 +434,8 @@ class ImpresionTicket {
                     pw.Row(
                         mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                         children: [
-                          pw.Text('IVA Calculado:', style: const pw.TextStyle(fontSize: 7)),
-                          pw.Text(Formatters.formatearMoneda(total * 0.16), style: const pw.TextStyle(fontSize: 7)),
+                          pw.Text('IVA:', style: const pw.TextStyle(fontSize: 7)),
+                          pw.Text(Formatters.formatearMoneda(total - (total / 1.16)), style: const pw.TextStyle(fontSize: 7)),
                         ]
                     ),
 
@@ -445,7 +445,7 @@ class ImpresionTicket {
                     pw.Row(
                         mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                         children: [
-                          pw.Text('TOTAL ACTUAL:', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 9)),
+                          pw.Text('TOTAL:', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 9)),
                           pw.Text(Formatters.formatearMoneda(total), style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 9)),
                         ]
                     ),
@@ -453,7 +453,7 @@ class ImpresionTicket {
                     pw.Row(
                         mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                         children: [
-                          pw.Text('Recibido original:', style: const pw.TextStyle(fontSize: 7)),
+                          pw.Text('Recibido:', style: const pw.TextStyle(fontSize: 7)),
                           pw.Text(Formatters.formatearMoneda(recibido), style: const pw.TextStyle(fontSize: 7)),
                         ]
                     ),
@@ -469,7 +469,7 @@ class ImpresionTicket {
                     pw.Row(
                         mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                         children: [
-                          pw.Text('Cambio Original:', style: pw.TextStyle(fontSize: 6)),
+                          pw.Text('Cambio:', style: pw.TextStyle(fontSize: 6)),
                           pw.Text(Formatters.formatearMoneda(cambio), style: pw.TextStyle(fontSize: 6)),
                         ]
                     ),
@@ -628,8 +628,8 @@ class ImpresionTicket {
                     pw.Row(
                         mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                         children: [
-                          pw.Text('IVA Calculado:', style: const pw.TextStyle(fontSize: 7)),
-                          pw.Text('\$${(total * 0.16).toStringAsFixed(2)}', style: const pw.TextStyle(fontSize: 7)),
+                          pw.Text('IVA:', style: const pw.TextStyle(fontSize: 7)),
+                          pw.Text('\$${(total-(total / 1.16)).toStringAsFixed(2)}', style: const pw.TextStyle(fontSize: 7)),
                         ]
                     ),
 
@@ -638,7 +638,7 @@ class ImpresionTicket {
                     pw.Row(
                         mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                         children: [
-                          pw.Text('TOTAL ACTUAL:', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 9)),
+                          pw.Text('TOTAL:', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 9)),
                           pw.Text('\$${total.toStringAsFixed(2)}', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 9)),
                         ]
                     ),
@@ -646,7 +646,7 @@ class ImpresionTicket {
                     pw.Row(
                         mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                         children: [
-                          pw.Text('Recibido original:', style: const pw.TextStyle(fontSize: 7)),
+                          pw.Text('Recibido:', style: const pw.TextStyle(fontSize: 7)),
                           pw.Text('\$${recibido.toStringAsFixed(2)}', style: const pw.TextStyle(fontSize: 7)),
                         ]
                     ),
