@@ -4,7 +4,7 @@ class ItemVenta {
   String sku;
   String codigo;
   String descripcion;
-  double cantidad; // Soporta enteros y decimales (metros/kilos)
+  double cantidad; // Soporta enteros y fracciones decimales (metros/kilos)
   double precio;
   double costo;
   bool esGranel;
@@ -19,7 +19,10 @@ class ItemVenta {
     this.esGranel = false,
   }) : cantidad = cantidad.toDouble();
 
+  /// Importe de cobro al público: P_cobro = M * P_unitario
   double get subtotal => cantidad * precio;
+
+  /// Capital de recuperación proporcional: C_venta = M * C_unitario
   double get costoProporcional => cantidad * costo;
 
   factory ItemVenta.desdeMapa(Map<String, dynamic> map) {
@@ -34,8 +37,11 @@ class ItemVenta {
     );
   }
 
-  factory ItemVenta.fromJson(Map<String, dynamic> json) => ItemVenta.desdeMapa(json);
-  factory ItemVenta.fromMap(Map<String, dynamic> map) => ItemVenta.desdeMapa(map);
+  factory ItemVenta.fromJson(Map<String, dynamic> json) =>
+      ItemVenta.desdeMapa(json);
+
+  factory ItemVenta.fromMap(Map<String, dynamic> map) =>
+      ItemVenta.desdeMapa(map);
 
   Map<String, dynamic> aMapa() {
     return {
@@ -51,16 +57,16 @@ class ItemVenta {
     };
   }
 
-  // Restaurado para compatibilidad con calendario_ventas.dart y venta.dart
   Map<String, dynamic> toJson() => aMapa();
+
   Map<String, dynamic> toMap() => aMapa();
 
   static List<ItemVenta> listaDesdeString(String rawJson) {
     if (rawJson.trim().isEmpty) return [];
     try {
       final List<dynamic> decoded = jsonDecode(rawJson);
-      final List<ItemVenta> resultado = [];
-      for (final item in decoded) {
+      final List<ItemVenta> resultado = <ItemVenta>[];
+      for (final dynamic item in decoded) {
         if (item is Map) {
           resultado.add(
             ItemVenta.desdeMapa(Map<String, dynamic>.from(item)),
@@ -69,11 +75,11 @@ class ItemVenta {
       }
       return resultado;
     } catch (_) {
-      return [];
+      return <ItemVenta>[];
     }
   }
 
   static String listaAJson(List<ItemVenta> items) {
-    return jsonEncode(items.map((e) => e.aMapa()).toList());
+    return jsonEncode(items.map((ItemVenta e) => e.aMapa()).toList());
   }
 }

@@ -297,7 +297,7 @@ class _AjustePreciosDialogState extends State<AjustePreciosDialog> {
 
     setState(() => _procesando = true);
 
-    await DBHelper.instance.ajustarPreciosMasivo(null, precioVal, true);
+    await DBHelper.instance.ajustarPreciosMasivo(_marcasSeleccionadas.toList(), costoVal, precioVal);
 
     setState(() => _procesando = false);
     if (mounted) {

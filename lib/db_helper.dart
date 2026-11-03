@@ -6,9 +6,6 @@ import 'package:ksystem/databases/app_database.dart';
 import 'package:ksystem/models/producto.dart';
 import 'package:ksystem/models/item_venta.dart';
 
-typedef FilaDB = Map<String, dynamic>;
-typedef ListaFilasDB = List>;
-
 class DBHelper {
   static final DBHelper instance = DBHelper._init();
   static const Uuid _uuid = Uuid();
@@ -19,12 +16,12 @@ class DBHelper {
   Future<Database> get _db async => AppDatabase.instance.database;
 
   // ===================================================
-  // SECCIÓN 1: PRODUCTOS E INVENTARIO
+  // SECCIÓN 1: PRODUCTOS E INVENTARIO (RF-01 a RF-05, RF-16)
   // ===================================================
 
-  Future<int> insertProducto(FilaDB row) async {
+  Future<int> insertProducto(Map<String, dynamic> row) async {
     final db = await _db;
-    final data = FilaDB.from(row);
+    final data = Map<String, dynamic>.from(row);
     data['uuid'] ??= _uuid.v4();
     data['updated_at'] = DateTime.now().toIso8601String();
     data['borrado'] ??= 0;
@@ -36,52 +33,61 @@ class DBHelper {
   }
 
   Future<List<Producto>> buscarParaSeleccionManual(String query) async {
-    if (query.trim().isEmpty) return [];
+    if (query.trim().isEmpty) return <Producto>[];
     final db = await _db;
     final patron = '%${query.trim()}%';
     final res = await db.query(
       'productos',
-      where: 'borrado = 0 AND (descripcion LIKE ? OR ubicacion LIKE ? OR sku LIKE ? OR codigo LIKE ?)',
-      whereArgs: [patron, patron, patron, patron],
+      where:
+      'borrado = 0 AND (descripcion LIKE ? OR ubicacion LIKE ? OR sku LIKE ? OR codigo LIKE ?)',
+      whereArgs: <Object?>[patron, patron, patron, patron],
       orderBy: 'descripcion ASC',
-      limit: 20,
+      limit: 20, // RNF-04: Límite de 20 en autocompletado rápido de POS
     );
-    return res.map((e) => Producto.desdeMapa(e)).toList();
+    return res.map((Map<String, dynamic> e) => Producto.desdeMapa(e)).toList();
   }
 
-  Future<List<Producto>> buscarProductosMulticriterio(String filtro, {int limite = 100}) async {
+  Future<List<Producto>> buscarProductosMulticriterio(
+      String filtro, {
+        int limite = 100,
+      }) async {
     final db = await _db;
     if (filtro.trim().isEmpty) {
       final res = await db.query(
         'productos',
         where: 'borrado = 0',
         orderBy: 'descripcion ASC',
-        limit: limite,
+        limit: limite, // RNF-04: Límite de 100 en vista general
       );
-      return res.map((e) => Producto.desdeMapa(e)).toList();
+      return res
+          .map((Map<String, dynamic> e) => Producto.desdeMapa(e))
+          .toList();
     }
     final patron = '%${filtro.trim()}%';
     final resultados = await db.query(
       'productos',
-      where: 'borrado = 0 AND (descripcion LIKE ? OR codigo LIKE ? OR sku LIKE ? OR marca LIKE ? OR ubicacion LIKE ?)',
-      whereArgs: [patron, patron, patron, patron, patron],
+      where:
+      'borrado = 0 AND (descripcion LIKE ? OR codigo LIKE ? OR sku LIKE ? OR marca LIKE ? OR ubicacion LIKE ?)',
+      whereArgs: <Object?>[patron, patron, patron, patron, patron],
       orderBy: 'descripcion ASC',
       limit: limite,
     );
-    return resultados.map((mapa) => Producto.desdeMapa(mapa)).toList();
+    return resultados
+        .map((Map<String, dynamic> mapa) => Producto.desdeMapa(mapa))
+        .toList();
   }
 
-  Future<FilaDB?> getProductoPorCodigo(String codigo) async {
+  Future<Map<String, dynamic>?> getProductoPorCodigo(String codigo) async {
     final db = await _db;
     final maps = await db.query(
       'productos',
       where: 'codigo = ? AND borrado = 0',
-      whereArgs: [codigo],
+      whereArgs: <Object?>[codigo],
     );
     return maps.isNotEmpty ? maps.first : null;
   }
 
-  Future<ListaFilasDB> buscarProductos(String query) async {
+  Future<List<Map<String, dynamic>>> buscarProductos(String query) async {
     final db = await _db;
     if (query.trim().isEmpty) {
       return await db.query(
@@ -93,12 +99,14 @@ class DBHelper {
     final patron = '%${query.trim()}%';
     return await db.query(
       'productos',
-      where: 'borrado = 0 AND (descripcion LIKE ? OR codigo LIKE ? OR sku LIKE ? OR marca LIKE ? OR ubicacion LIKE ?)',
-      whereArgs: [patron, patron, patron, patron, patron],
+      where:
+      'borrado = 0 AND (descripcion LIKE ? OR codigo LIKE ? OR sku LIKE ? OR marca LIKE ? OR ubicacion LIKE ?)',
+      whereArgs: <Object?>[patron, patron, patron, patron, patron],
       orderBy: 'descripcion ASC',
     );
   }
 
+  /// Soporta incremento o descuento tanto entero como decimal (Venta a Granel RF-16)
   Future<int> updateStock(String codigo, num cantidad) async {
     final db = await _db;
     final prod = await getProductoPorCodigo(codigo);
@@ -109,25 +117,26 @@ class DBHelper {
     );
     return await db.update(
       'productos',
-      {
+      <String, Object?>{
         'stock': nuevoStock,
         'updated_at': DateTime.now().toIso8601String(),
       },
       where: 'id = ?',
-      whereArgs: [prod['id']],
+      whereArgs: <Object?>[prod['id']],
     );
   }
 
+  /// Baja lógica para preservar integridad referencial en historial de cortes (RF-01 / 5.3.4)
   Future<int> deleteProducto(int id) async {
     final db = await _db;
     return await db.update(
       'productos',
-      {
+      <String, Object?>{
         'borrado': 1,
         'updated_at': DateTime.now().toIso8601String(),
       },
       where: 'id = ?',
-      whereArgs: [id],
+      whereArgs: <Object?>[id],
     );
   }
 
@@ -139,28 +148,28 @@ class DBHelper {
     final db = await _db;
     return await db.update(
       'productos',
-      {
+      <String, Object?>{
         'codigo': nuevoCodigo,
         'updated_at': DateTime.now().toIso8601String(),
       },
       where: 'id = ?',
-      whereArgs: [idProducto],
+      whereArgs: <Object?>[idProducto],
     );
   }
 
-  Future<int> updateProducto(FilaDB row) async {
+  Future<int> updateProducto(Map<String, dynamic> row) async {
     final db = await _db;
-    final data = FilaDB.from(row);
+    final data = Map<String, dynamic>.from(row);
     data['updated_at'] = DateTime.now().toIso8601String();
     return await db.update(
       'productos',
       data,
       where: 'id = ?',
-      whereArgs: [data['id']],
+      whereArgs: <Object?>[data['id']],
     );
   }
 
-  Future<ListaFilasDB> getProductosAgotados() async {
+  Future<List<Map<String, dynamic>>> getProductosAgotados() async {
     final db = await _db;
     return await db.query(
       'productos',
@@ -176,63 +185,70 @@ class DBHelper {
       "SELECT DISTINCT marca FROM productos WHERE borrado = 0 AND marca IS NOT NULL AND TRIM(marca) != '' ORDER BY marca ASC",
     );
     return res
-        .map((row) => (row['marca'] ?? '').toString().trim())
-        .where((m) => m.isNotEmpty)
+        .map((Map<String, Object?> row) => (row['marca'] ?? '').toString().trim())
+        .where((String m) => m.isNotEmpty)
         .toList();
   }
 
-  /// Ajusta precios masivamente por marca o globalmente según porcentaje (usado en productos.dart)
+  /// Ajusta costo y precio masivamente recibiendo List<String> de marcas (firma exacta de productos.dart)
   Future<int> ajustarPreciosMasivo(
-      String? marca,
-      double porcentaje, [
-        bool redondear = false,
-      ]) async {
+      List<String> marcas,
+      double porcentajeCosto,
+      double porcentajePrecio,
+      ) async {
     final db = await _db;
-    final double factor = 1.0 + (porcentaje / 100.0);
+    final double factorCosto = 1.0 + (porcentajeCosto / 100.0);
+    final double factorPrecio = 1.0 + (porcentajePrecio / 100.0);
     final String ahora = DateTime.now().toIso8601String();
 
     String whereClause = 'borrado = 0';
-    List<dynamic> args = [];
+    List<Object?> args = <Object?>[];
 
-    if (marca != null &&
-        marca.trim().isNotEmpty &&
-        marca.toUpperCase() != 'TODAS') {
-      whereClause += ' AND marca = ?';
-      args.add(marca.trim());
+    final List<String> marcasLimpias = marcas
+        .map((String m) => m.trim())
+        .where((String m) => m.isNotEmpty && m.toUpperCase() != 'TODAS')
+        .toList();
+
+    if (marcasLimpias.isNotEmpty) {
+      final String placeholders =
+      List<String>.filled(marcasLimpias.length, '?').join(', ');
+      whereClause += ' AND marca IN ($placeholders)';
+      args.addAll(marcasLimpias);
     }
 
-    final productos = await db.query(
+    final List<Map<String, Object?>> productos = await db.query(
       'productos',
       where: whereClause,
       whereArgs: args.isEmpty ? null : args,
     );
 
     int actualizados = 0;
-    await db.transaction((txn) async {
-      for (final p in productos) {
+    await db.transaction((Transaction txn) async {
+      for (final Map<String, Object?> p in productos) {
+        final double costoActual = (p['costo'] as num?)?.toDouble() ?? 0.0;
         final double precioActual = (p['precio'] as num?)?.toDouble() ?? 0.0;
         final double rappiActual = (p['precioRappi'] as num?)?.toDouble() ?? 0.0;
 
-        double nuevoPrecio = precioActual * factor;
-        double nuevoRappi = rappiActual * factor;
-
-        if (redondear) {
-          nuevoPrecio = nuevoPrecio.roundToDouble();
-          nuevoRappi = nuevoRappi.roundToDouble();
-        } else {
-          nuevoPrecio = double.parse(nuevoPrecio.toStringAsFixed(2));
-          nuevoRappi = double.parse(nuevoRappi.toStringAsFixed(2));
-        }
+        final double nuevoCosto = porcentajeCosto != 0
+            ? double.parse((costoActual * factorCosto).toStringAsFixed(2))
+            : costoActual;
+        final double nuevoPrecio = porcentajePrecio != 0
+            ? double.parse((precioActual * factorPrecio).toStringAsFixed(2))
+            : precioActual;
+        final double nuevoRappi = porcentajePrecio != 0
+            ? double.parse((rappiActual * factorPrecio).toStringAsFixed(2))
+            : rappiActual;
 
         await txn.update(
           'productos',
-          {
+          <String, Object?>{
+            'costo': nuevoCosto,
             'precio': nuevoPrecio,
             'precioRappi': nuevoRappi,
             'updated_at': ahora,
           },
           where: 'id = ?',
-          whereArgs: [p['id']],
+          whereArgs: <Object?>[p['id']],
         );
         actualizados++;
       }
@@ -242,7 +258,7 @@ class DBHelper {
   }
 
   // ===================================================
-  // SECCIÓN 2: DEUDAS Y FINANZAS
+  // SECCIÓN 2: DEUDAS Y FINANZAS (RF-11 y RF-12)
   // ===================================================
 
   Future<void> actualizarDeuda(
@@ -252,14 +268,20 @@ class DBHelper {
       ) async {
     final db = await _db;
     final ahora = DateTime.now().toIso8601String();
-    final res = await db.query('deudores', where: 'nombre = ?', whereArgs: [nombre]);
+    final res = await db.query(
+      'deudores',
+      where: 'nombre = ?',
+      whereArgs: <Object?>[nombre],
+    );
 
     if (res.isNotEmpty) {
       final actual = res.first;
-      final double totalActual = (actual['total_deuda'] as num?)?.toDouble() ?? 0.0;
+      final double totalActual =
+          (actual['total_deuda'] as num?)?.toDouble() ?? 0.0;
       final String itemsActuales = (actual['items'] ?? '[]').toString();
 
-      final List<ItemVenta> listaFinal = ItemVenta.listaDesdeString(itemsActuales);
+      final List<ItemVenta> listaFinal =
+      ItemVenta.listaDesdeString(itemsActuales);
       listaFinal.addAll(ItemVenta.listaDesdeString(nuevosItemsJson));
 
       final String jsonFinal = ItemVenta.listaAJson(listaFinal);
@@ -267,17 +289,17 @@ class DBHelper {
 
       await db.update(
         'deudores',
-        {
+        <String, Object?>{
           'items': jsonFinal,
           'total_deuda': totalFinal,
           'fecha_ultimo_fiado': ahora,
           'updated_at': ahora,
         },
         where: 'id = ?',
-        whereArgs: [actual['id']],
+        whereArgs: <Object?>[actual['id']],
       );
     } else {
-      await db.insert('deudores', {
+      await db.insert('deudores', <String, Object?>{
         'uuid': _uuid.v4(),
         'nombre': nombre,
         'items': nuevosItemsJson,
@@ -288,7 +310,7 @@ class DBHelper {
     }
   }
 
-  Future<ListaFilasDB> obtenerDeudores(String query) async {
+  Future<List<Map<String, dynamic>>> obtenerDeudores(String query) async {
     final db = await _db;
     if (query.trim().isEmpty) {
       return await db.query('deudores', orderBy: 'fecha_ultimo_fiado DESC');
@@ -296,7 +318,7 @@ class DBHelper {
       return await db.query(
         'deudores',
         where: 'nombre LIKE ?',
-        whereArgs: ['%${query.trim()}%'],
+        whereArgs: <Object?>['%${query.trim()}%'],
         orderBy: 'fecha_ultimo_fiado DESC',
       );
     }
@@ -304,21 +326,26 @@ class DBHelper {
 
   Future<void> abonar(int id, double montoAbono) async {
     final db = await _db;
-    final res = await db.query('deudores', where: 'id = ?', whereArgs: [id]);
+    final res = await db.query(
+      'deudores',
+      where: 'id = ?',
+      whereArgs: <Object?>[id],
+    );
     if (res.isNotEmpty) {
-      final double deuda = (res.first['total_deuda'] as num?)?.toDouble() ?? 0.0;
+      final double deuda =
+          (res.first['total_deuda'] as num?)?.toDouble() ?? 0.0;
       final double restante = deuda - montoAbono;
       if (restante <= 0.009) {
-        await db.delete('deudores', where: 'id = ?', whereArgs: [id]);
+        await db.delete('deudores', where: 'id = ?', whereArgs: <Object?>[id]);
       } else {
         await db.update(
           'deudores',
-          {
+          <String, Object?>{
             'total_deuda': restante,
             'updated_at': DateTime.now().toIso8601String(),
           },
           where: 'id = ?',
-          whereArgs: [id],
+          whereArgs: <Object?>[id],
         );
       }
     }
@@ -331,18 +358,32 @@ class DBHelper {
   Future<void> depurarBaseDatos() async {
     final db = await _db;
     final now = DateTime.now();
-    final limiteSieteDias = now.subtract(const Duration(days: 7)).toIso8601String();
-    final hace2Anios = now.subtract(const Duration(days: 730)).toIso8601String();
-    final hace5Anios = now.subtract(const Duration(days: 1825)).toIso8601String();
+    final limiteSieteDias =
+    now.subtract(const Duration(days: 7)).toIso8601String();
+    final hace2Anios =
+    now.subtract(const Duration(days: 730)).toIso8601String();
+    final hace5Anios =
+    now.subtract(const Duration(days: 1825)).toIso8601String();
 
-    await db.delete('recientes', where: 'fecha_agregado < ?', whereArgs: [limiteSieteDias]);
+    await db.delete(
+      'recientes',
+      where: 'fecha_agregado < ?',
+      whereArgs: <Object?>[limiteSieteDias],
+    );
     await db.update(
       'ventas_historial',
-      {'es_activo': 0, 'updated_at': now.toIso8601String()},
+      <String, Object?>{
+        'es_activo': 0,
+        'updated_at': now.toIso8601String(),
+      },
       where: 'fecha < ? AND es_activo = 1',
-      whereArgs: [hace2Anios],
+      whereArgs: <Object?>[hace2Anios],
     );
-    await db.delete('ventas_historial', where: 'fecha < ?', whereArgs: [hace5Anios]);
+    await db.delete(
+      'ventas_historial',
+      where: 'fecha < ?',
+      whereArgs: <Object?>[hace5Anios],
+    );
   }
 
   Future<void> depurarBaseDatosSeguro() async {
@@ -366,8 +407,8 @@ class DBHelper {
     final db = await _db;
     final ahora = DateTime.now().toIso8601String();
 
-    return await db.transaction((txn) async {
-      final int idGenerado = await txn.insert('ventas_historial', {
+    return await db.transaction((Transaction txn) async {
+      final int idGenerado = await txn.insert('ventas_historial', <String, Object?>{
         'uuid': _uuid.v4(),
         'fecha': fecha,
         'total': total,
@@ -383,9 +424,9 @@ class DBHelper {
 
       try {
         final List<dynamic> itemsList = jsonDecode(items);
-        for (final it in itemsList) {
+        for (final dynamic it in itemsList) {
           if (it is Map) {
-            await txn.insert('ventas_detalles', {
+            await txn.insert('ventas_detalles', <String, Object?>{
               'venta_id': idGenerado,
               'sku': it['sku'] ?? 'N/A',
               'descripcion': it['descripcion'] ?? 'Sin descripción',
@@ -402,9 +443,9 @@ class DBHelper {
 
       await txn.update(
         'ventas_historial',
-        {'folio_venta': idGenerado.toString()},
+        <String, Object?>{'folio_venta': idGenerado.toString()},
         where: 'id = ?',
-        whereArgs: [idGenerado],
+        whereArgs: <Object?>[idGenerado],
       );
 
       return idGenerado;
@@ -416,20 +457,22 @@ class DBHelper {
     required double nuevoTotal,
     required double nuevoCosto,
     required String nuevosItems,
-    ListaFilasDB? itemsDevueltos,
+    List<Map<String, dynamic>>? itemsDevueltos,
     String? nuevoFolioDisplay,
   }) async {
     final db = await _db;
     final ahora = DateTime.now().toIso8601String();
-    final String baseFolio = (nuevoFolioDisplay != null && nuevoFolioDisplay.isNotEmpty)
+    final String baseFolio =
+    (nuevoFolioDisplay != null && nuevoFolioDisplay.isNotEmpty)
         ? nuevoFolioDisplay
         : id.toString();
-    final String folioFinal = baseFolio.endsWith('M') ? baseFolio : '${baseFolio}M';
+    final String folioFinal =
+    baseFolio.endsWith('M') ? baseFolio : '${baseFolio}M';
 
-    await db.transaction((txn) async {
+    await db.transaction((Transaction txn) async {
       await txn.update(
         'ventas_historial',
-        {
+        <String, Object?>{
           'total': nuevoTotal,
           'costo_total': nuevoCosto,
           'items': nuevosItems,
@@ -437,31 +480,33 @@ class DBHelper {
           'updated_at': ahora,
         },
         where: 'id = ?',
-        whereArgs: [id],
+        whereArgs: <Object?>[id],
       );
 
       if (itemsDevueltos != null) {
-        for (final item in itemsDevueltos) {
+        for (final Map<String, dynamic> item in itemsDevueltos) {
           final res = await txn.query(
             'ventas_detalles',
             where: 'venta_id = ? AND sku = ? AND estado = ?',
-            whereArgs: [id, item['sku'], 'activo'],
+            whereArgs: <Object?>[id, item['sku'], 'activo'],
           );
 
-          double cantidadPorDevolver = (item['cantidad'] as num?)?.toDouble() ?? 0.0;
+          double cantidadPorDevolver =
+              (item['cantidad'] as num?)?.toDouble() ?? 0.0;
 
-          for (final row in res) {
+          for (final Map<String, Object?> row in res) {
             if (cantidadPorDevolver <= 0.0001) break;
 
             final int idRenglon = row['id'] as int;
-            final double cantidadEnRenglon = (row['cantidad'] as num?)?.toDouble() ?? 0.0;
+            final double cantidadEnRenglon =
+                (row['cantidad'] as num?)?.toDouble() ?? 0.0;
 
             if (cantidadEnRenglon <= cantidadPorDevolver + 0.0001) {
               await txn.update(
                 'ventas_detalles',
-                {'estado': 'devuelto'},
+                <String, Object?>{'estado': 'devuelto'},
                 where: 'id = ?',
-                whereArgs: [idRenglon],
+                whereArgs: <Object?>[idRenglon],
               );
               cantidadPorDevolver -= cantidadEnRenglon;
             } else {
@@ -470,12 +515,12 @@ class DBHelper {
               );
               await txn.update(
                 'ventas_detalles',
-                {'cantidad': cantidadRestante},
+                <String, Object?>{'cantidad': cantidadRestante},
                 where: 'id = ?',
-                whereArgs: [idRenglon],
+                whereArgs: <Object?>[idRenglon],
               );
 
-              await txn.insert('ventas_detalles', {
+              await txn.insert('ventas_detalles', <String, Object?>{
                 'venta_id': id,
                 'sku': row['sku'],
                 'descripcion': row['descripcion'],
@@ -493,12 +538,19 @@ class DBHelper {
     });
   }
 
-  Future<ListaFilasDB> obtenerDetallesVenta(int ventaId) async {
+  Future<List<Map<String, dynamic>>> obtenerDetallesVenta(int ventaId) async {
     final db = await _db;
-    return await db.query('ventas_detalles', where: 'venta_id = ?', whereArgs: [ventaId]);
+    return await db.query(
+      'ventas_detalles',
+      where: 'venta_id = ?',
+      whereArgs: <Object?>[ventaId],
+    );
   }
 
-  Future<ListaFilasDB> buscarVentas(String query, bool soloActivos) async {
+  Future<List<Map<String, dynamic>>> buscarVentas(
+      String query,
+      bool soloActivos,
+      ) async {
     final db = await _db;
     String whereClause = soloActivos ? 'es_activo = 1' : 'es_activo = 0';
     if (query.trim().isNotEmpty) {
@@ -507,20 +559,26 @@ class DBHelper {
       return await db.query(
         'ventas_historial',
         where: whereClause,
-        whereArgs: [patron, patron],
+        whereArgs: <Object?>[patron, patron],
         orderBy: 'fecha DESC',
       );
     } else {
-      return await db.query('ventas_historial', where: whereClause, orderBy: 'fecha DESC');
+      return await db.query(
+        'ventas_historial',
+        where: whereClause,
+        orderBy: 'fecha DESC',
+      );
     }
   }
 
-  Future<ListaFilasDB> obtenerVentasDelDia(String fechaHoyYMD) async {
+  Future<List<Map<String, dynamic>>> obtenerVentasDelDia(
+      String fechaHoyYMD,
+      ) async {
     final db = await _db;
     return await db.query(
       'ventas_historial',
       where: 'fecha LIKE ? AND es_activo = 1',
-      whereArgs: ['$fechaHoyYMD%'],
+      whereArgs: <Object?>['$fechaHoyYMD%'],
       orderBy: 'fecha DESC',
     );
   }
@@ -529,27 +587,30 @@ class DBHelper {
     final db = await _db;
     return await db.update(
       'ventas_historial',
-      {
+      <String, Object?>{
         'cliente': nuevoNombre,
         'updated_at': DateTime.now().toIso8601String(),
       },
       where: 'id = ?',
-      whereArgs: [id],
+      whereArgs: <Object?>[id],
     );
   }
 
-  Future<FilaDB?> buscarVentaPorFolio(dynamic folio) async {
+  Future<Map<String, dynamic>?> buscarVentaPorFolio(dynamic folio) async {
     final db = await _db;
     final res = await db.query(
       'ventas_historial',
       where: 'folio_venta = ?',
-      whereArgs: [folio.toString()],
+      whereArgs: <Object?>[folio.toString()],
       limit: 1,
     );
     return res.isNotEmpty ? res.first : null;
   }
 
-  Future<ListaFilasDB> obtenerVentasPorMes(int mes, int anio) async {
+  Future<List<Map<String, dynamic>>> obtenerVentasPorMes(
+      int mes,
+      int anio,
+      ) async {
     final db = await _db;
     final String mesStr = mes.toString().padLeft(2, '0');
     final String fechaLike = '$anio-$mesStr-%';
@@ -562,10 +623,13 @@ class DBHelper {
       FROM ventas_historial
       WHERE fecha LIKE ? AND es_activo = 1
       GROUP BY substr(fecha, 1, 10)
-    ''', [fechaLike]);
+    ''', <Object?>[fechaLike]);
   }
 
-  Future<ListaFilasDB> obtenerVentasRango(String fechaInicio, String fechaFin) async {
+  Future<List<Map<String, dynamic>>> obtenerVentasRango(
+      String fechaInicio,
+      String fechaFin,
+      ) async {
     final db = await _db;
     return await db.rawQuery('''
       SELECT 
@@ -575,10 +639,12 @@ class DBHelper {
       FROM ventas_historial
       WHERE substr(fecha, 1, 10) BETWEEN ? AND ? AND es_activo = 1
       GROUP BY substr(fecha, 1, 10)
-    ''', [fechaInicio, fechaFin]);
+    ''', <Object?>[fechaInicio, fechaFin]);
   }
 
-  Future<FilaDB> obtenerResumenCorteFinanciero(String prefijoFecha) async {
+  Future<Map<String, dynamic>> obtenerResumenCorteFinanciero(
+      String prefijoFecha,
+      ) async {
     final db = await _db;
     final res = await db.rawQuery('''
       SELECT 
@@ -587,11 +653,14 @@ class DBHelper {
         COALESCE(SUM(total - costo_total), 0.0) AS utilidad_neta
       FROM ventas_historial
       WHERE es_activo = 1 AND fecha LIKE ?
-    ''', ['$prefijoFecha%']);
+    ''', <Object?>['$prefijoFecha%']);
     return res.first;
   }
 
-  Future<FilaDB?> obtenerProductoMasVendidoMes(int mes, int anio) async {
+  Future<Map<String, dynamic>?> obtenerProductoMasVendidoMes(
+      int mes,
+      int anio,
+      ) async {
     final db = await _db;
     final String mesStr = mes.toString().padLeft(2, '0');
     final String fechaLike = '$anio-$mesStr-%';
@@ -608,7 +677,7 @@ class DBHelper {
       GROUP BY d.sku, d.descripcion
       ORDER BY total_unidades DESC
       LIMIT 1
-    ''', [fechaLike]);
+    ''', <Object?>[fechaLike]);
 
     if (res.isNotEmpty && res.first['descripcion'] != null) {
       return res.first;
@@ -616,18 +685,20 @@ class DBHelper {
     return null;
   }
 
-  Future<ListaFilasDB> obtenerVentasPorDia(String fechaYmd) async {
+  Future<List<Map<String, dynamic>>> obtenerVentasPorDia(
+      String fechaYmd,
+      ) async {
     final db = await _db;
     return await db.query(
       'ventas_historial',
       where: 'fecha LIKE ?',
-      whereArgs: ['$fechaYmd%'],
+      whereArgs: <Object?>['$fechaYmd%'],
       orderBy: 'fecha DESC',
     );
   }
 
   // ===================================================
-  // SECCIÓN 4: ARTÍCULOS RECIENTES
+  // SECCIÓN 4: ARTÍCULOS RECIENTES (RF-06)
   // ===================================================
 
   Future<void> agregarReciente(String codigo) async {
@@ -635,22 +706,22 @@ class DBHelper {
     final fecha = DateTime.now().toIso8601String();
     await db.insert(
       'recientes',
-      {'codigo': codigo, 'fecha_agregado': fecha},
+      <String, Object?>{'codigo': codigo, 'fecha_agregado': fecha},
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
-    _limpiarAntiguos().catchError((e) => debugPrint('[DBHelper] Limpieza: $e'));
+    _limpiarAntiguos().catchError((Object e) => debugPrint('[DBHelper] Limpieza: $e'));
   }
 
   Future<List<Producto>> obtenerProductosRecientesCompletos() async {
     final codigos = await obtenerCodigosRecientes();
-    if (codigos.isEmpty) return [];
+    if (codigos.isEmpty) return <Producto>[];
 
     final resultados = await Future.wait(
-      codigos.map((codigo) => getProductoPorCodigo(codigo)),
+      codigos.map((String codigo) => getProductoPorCodigo(codigo)),
     );
 
-    final List<Producto> productos = [];
-    for (final mapa in resultados) {
+    final List<Producto> productos = <Producto>[];
+    for (final Map<String, dynamic>? mapa in resultados) {
       if (mapa != null) {
         productos.add(Producto.desdeMapa(mapa));
       }
@@ -662,12 +733,17 @@ class DBHelper {
     final db = await _db;
     await _limpiarAntiguos();
     final res = await db.query('recientes', orderBy: 'fecha_agregado DESC');
-    return res.map((e) => e['codigo'] as String).toList();
+    return res.map((Map<String, Object?> e) => e['codigo'] as String).toList();
   }
 
   Future<void> _limpiarAntiguos() async {
     final db = await _db;
-    final limite = DateTime.now().subtract(const Duration(days: 7)).toIso8601String();
-    await db.delete('recientes', where: 'fecha_agregado < ?', whereArgs: [limite]);
+    final limite =
+    DateTime.now().subtract(const Duration(days: 7)).toIso8601String();
+    await db.delete(
+      'recientes',
+      where: 'fecha_agregado < ?',
+      whereArgs: <Object?>[limite],
+    );
   }
 }
