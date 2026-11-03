@@ -5,7 +5,7 @@ import 'dart:io';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:window_manager/window_manager.dart';
 import 'databases/app_database.dart';
-import 'databases/history_db.dart';
+import 'db_helper.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -32,7 +32,7 @@ void main() async {
   }
 
   await AppDatabase.instance.database;
-  HistoryDB.instance.depurarBaseDatosSeguro();
+  DBHelper.instance.depurarBaseDatosSeguro();
   runApp(const MyApp());
 }
 

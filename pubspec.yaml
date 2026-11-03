@@ -9,18 +9,18 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  # Base de datos local
-  sqflite_common_ffi: ^2.3.0 # Necesario para Windows/Linux/Mac
-  sqflite: ^2.3.0
-  path: ^1.8.3
-  path_provider: ^2.1.1
-  # Utilidades
-  intl: ^0.18.1
-  file_picker: ^5.0.0
+  sqflite: any
+  sqflite_common_ffi: any
+  path: any
+  path_provider: any
+  uuid: ^4.4.0
+  pdf: any
+  printing: any
+  intl: any
+
+  file_picker: ^10.0.0
   excel: ^4.0.6
   cupertino_icons: ^1.0.2
-  pdf: ^3.10.0
-  printing: ^5.11.0
 
   shared_preferences: ^2.5.5
   url_launcher: ^6.3.0

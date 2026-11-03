@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../models/producto.dart';
 import '../db_helper.dart';
-import '../databases/recent_db.dart';
+import '../db_helper.dart';
 import '../constants/colores.dart';
 import '../Utils/numeric_formatter.dart';
 
@@ -243,7 +243,7 @@ class _ProductFormDialogState extends State<ProductFormDialog> {
               } else {
                 await DBHelper.instance.insertProducto(prod.aMapa());
               }
-              await RecentDB.instance.agregarReciente(prod.codigo);
+              await DBHelper.instance.agregarReciente(prod.codigo);
 
               // Si fue una inserción nueva, intentamos recuperar el ID
               if (!esEdicion) {

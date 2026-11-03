@@ -1,100 +1,673 @@
+import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
-import 'databases/app_database.dart';
-import 'models/producto.dart';
+import 'package:uuid/uuid.dart';
+import 'package:ksystem/databases/app_database.dart';
+import 'package:ksystem/models/producto.dart';
+import 'package:ksystem/models/item_venta.dart';
+
+typedef FilaDB = Map<String, dynamic>;
+typedef ListaFilasDB = List>;
 
 class DBHelper {
   static final DBHelper instance = DBHelper._init();
+  static const Uuid _uuid = Uuid();
+
   DBHelper._init();
 
-  // Cambiamos el nombre o añadimos un getter público
-  Future<Database> get database async {
-    return await AppDatabase.instance.database;
-  }
-
+  Future<Database> get database async => await AppDatabase.instance.database;
   Future<Database> get _db async => AppDatabase.instance.database;
 
-  Future<int> insertProducto(Map<String, dynamic> row) async {
-    final db = await _db;
-    return await db.insert('productos', row,
-        conflictAlgorithm: ConflictAlgorithm.replace);
-  }
-  Future<List<String>> getMarcasUnicas() async {
-    final db = await _db;
-    final res = await db.rawQuery('SELECT DISTINCT marca FROM productos WHERE marca IS NOT NULL AND marca != \'\' ORDER BY marca ASC');
-    return res.map((e) => e['marca'] as String).toList();
-  }
+  // ===================================================
+  // SECCIÓN 1: PRODUCTOS E INVENTARIO
+  // ===================================================
 
-  Future<int> ajustarPreciosMasivo(List<String> marcas, double aumentoCosto, double aumentoPrecio) async {
-    if (marcas.isEmpty) return 0;
+  Future<int> insertProducto(FilaDB row) async {
     final db = await _db;
-    final marcasPlaceholders = List.filled(marcas.length, '?').join(',');
-
-    return await db.rawUpdate('''
-      UPDATE productos 
-      SET costo = ROUND(costo * (1.0 + ? / 100.0), 2),
-          precio = ROUND(precio * (1.0 + ? / 100.0), 2)
-      WHERE marca IN ($marcasPlaceholders)
-    ''', [aumentoCosto, aumentoPrecio, ...marcas]);
-  }
-  // NUEVO: Lógica de negocio encapsulada para búsquedas manuales
-  Future<List<Producto>> buscarParaSeleccionManual(String query) async {
-    if (query.isEmpty) return [];
-
-    final db = await _db;
-    final res = await db.query(
-        'productos',
-        where: 'descripcion LIKE ? OR ubicacion LIKE ? OR sku LIKE ?',
-        whereArgs: ['%$query%', '%$query%', '%$query%'],
-        limit: 20 // Límite para proteger la memoria
+    final data = FilaDB.from(row);
+    data['uuid'] ??= _uuid.v4();
+    data['updated_at'] = DateTime.now().toIso8601String();
+    data['borrado'] ??= 0;
+    return await db.insert(
+      'productos',
+      data,
+      conflictAlgorithm: ConflictAlgorithm.replace,
     );
+  }
 
-    // Mapeamos aquí, la UI solo recibe la lista de objetos listos para usar
+  Future<List<Producto>> buscarParaSeleccionManual(String query) async {
+    if (query.trim().isEmpty) return [];
+    final db = await _db;
+    final patron = '%${query.trim()}%';
+    final res = await db.query(
+      'productos',
+      where: 'borrado = 0 AND (descripcion LIKE ? OR ubicacion LIKE ? OR sku LIKE ? OR codigo LIKE ?)',
+      whereArgs: [patron, patron, patron, patron],
+      orderBy: 'descripcion ASC',
+      limit: 20,
+    );
     return res.map((e) => Producto.desdeMapa(e)).toList();
   }
 
-  Future<Map<String, dynamic>?> getProductoPorCodigo(String codigo) async {
+  Future<List<Producto>> buscarProductosMulticriterio(String filtro, {int limite = 100}) async {
     final db = await _db;
-    final maps = await db.query('productos',
-        where: 'codigo = ?', whereArgs: [codigo]);
+    if (filtro.trim().isEmpty) {
+      final res = await db.query(
+        'productos',
+        where: 'borrado = 0',
+        orderBy: 'descripcion ASC',
+        limit: limite,
+      );
+      return res.map((e) => Producto.desdeMapa(e)).toList();
+    }
+    final patron = '%${filtro.trim()}%';
+    final resultados = await db.query(
+      'productos',
+      where: 'borrado = 0 AND (descripcion LIKE ? OR codigo LIKE ? OR sku LIKE ? OR marca LIKE ? OR ubicacion LIKE ?)',
+      whereArgs: [patron, patron, patron, patron, patron],
+      orderBy: 'descripcion ASC',
+      limit: limite,
+    );
+    return resultados.map((mapa) => Producto.desdeMapa(mapa)).toList();
+  }
+
+  Future<FilaDB?> getProductoPorCodigo(String codigo) async {
+    final db = await _db;
+    final maps = await db.query(
+      'productos',
+      where: 'codigo = ? AND borrado = 0',
+      whereArgs: [codigo],
+    );
     return maps.isNotEmpty ? maps.first : null;
   }
 
-  Future<List<Map<String, dynamic>>> buscarProductos(String query) async {
+  Future<ListaFilasDB> buscarProductos(String query) async {
     final db = await _db;
-    return await db.query('productos',
-        where: 'descripcion LIKE ? OR codigo LIKE ? OR sku LIKE ? OR ubicacion LIKE ?',
-        whereArgs: ['%$query%', '%$query%', '%$query%', '%$query%']);
+    if (query.trim().isEmpty) {
+      return await db.query(
+        'productos',
+        where: 'borrado = 0',
+        orderBy: 'descripcion ASC',
+      );
+    }
+    final patron = '%${query.trim()}%';
+    return await db.query(
+      'productos',
+      where: 'borrado = 0 AND (descripcion LIKE ? OR codigo LIKE ? OR sku LIKE ? OR marca LIKE ? OR ubicacion LIKE ?)',
+      whereArgs: [patron, patron, patron, patron, patron],
+      orderBy: 'descripcion ASC',
+    );
   }
 
-  Future<int> updateStock(String codigo, int cantidad) async {
+  Future<int> updateStock(String codigo, num cantidad) async {
     final db = await _db;
     final prod = await getProductoPorCodigo(codigo);
     if (prod == null) return 0;
-    int nuevoStock = prod['stock'] + cantidad;
-    return await db.update('productos', {'stock': nuevoStock},
-        where: 'id = ?', whereArgs: [prod['id']]);
+    final double stockActual = (prod['stock'] as num?)?.toDouble() ?? 0.0;
+    final double nuevoStock = double.parse(
+      (stockActual + cantidad.toDouble()).toStringAsFixed(4),
+    );
+    return await db.update(
+      'productos',
+      {
+        'stock': nuevoStock,
+        'updated_at': DateTime.now().toIso8601String(),
+      },
+      where: 'id = ?',
+      whereArgs: [prod['id']],
+    );
   }
 
   Future<int> deleteProducto(int id) async {
     final db = await _db;
-    return await db.delete('productos', where: 'id = ?', whereArgs: [id]);
+    return await db.update(
+      'productos',
+      {
+        'borrado': 1,
+        'updated_at': DateTime.now().toIso8601String(),
+      },
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  Future<void> eliminarProductoLogico(int idProducto) async {
+    await deleteProducto(idProducto);
   }
 
   Future<int> vincularCodigo(int idProducto, String nuevoCodigo) async {
     final db = await _db;
-    return await db.update('productos', {'codigo': nuevoCodigo},
-        where: 'id = ?', whereArgs: [idProducto]);
+    return await db.update(
+      'productos',
+      {
+        'codigo': nuevoCodigo,
+        'updated_at': DateTime.now().toIso8601String(),
+      },
+      where: 'id = ?',
+      whereArgs: [idProducto],
+    );
   }
 
-  Future<int> updateProducto(Map<String, dynamic> row) async {
+  Future<int> updateProducto(FilaDB row) async {
     final db = await _db;
-    return await db.update('productos', row,
-        where: 'id = ?', whereArgs: [row['id']]);
+    final data = FilaDB.from(row);
+    data['updated_at'] = DateTime.now().toIso8601String();
+    return await db.update(
+      'productos',
+      data,
+      where: 'id = ?',
+      whereArgs: [data['id']],
+    );
   }
 
-  Future<List<Map<String, dynamic>>> getProductosAgotados() async {
+  Future<ListaFilasDB> getProductosAgotados() async {
     final db = await _db;
-    return await db.query('productos',
-        where: 'stock <= 0', orderBy: 'descripcion ASC');
+    return await db.query(
+      'productos',
+      where: 'borrado = 0 AND stock <= 0',
+      orderBy: 'descripcion ASC',
+    );
+  }
+
+  /// Obtiene la lista de marcas únicas registradas en el inventario (usado en productos.dart)
+  Future<List<String>> getMarcasUnicas() async {
+    final db = await _db;
+    final res = await db.rawQuery(
+      "SELECT DISTINCT marca FROM productos WHERE borrado = 0 AND marca IS NOT NULL AND TRIM(marca) != '' ORDER BY marca ASC",
+    );
+    return res
+        .map((row) => (row['marca'] ?? '').toString().trim())
+        .where((m) => m.isNotEmpty)
+        .toList();
+  }
+
+  /// Ajusta precios masivamente por marca o globalmente según porcentaje (usado en productos.dart)
+  Future<int> ajustarPreciosMasivo(
+      String? marca,
+      double porcentaje, [
+        bool redondear = false,
+      ]) async {
+    final db = await _db;
+    final double factor = 1.0 + (porcentaje / 100.0);
+    final String ahora = DateTime.now().toIso8601String();
+
+    String whereClause = 'borrado = 0';
+    List<dynamic> args = [];
+
+    if (marca != null &&
+        marca.trim().isNotEmpty &&
+        marca.toUpperCase() != 'TODAS') {
+      whereClause += ' AND marca = ?';
+      args.add(marca.trim());
+    }
+
+    final productos = await db.query(
+      'productos',
+      where: whereClause,
+      whereArgs: args.isEmpty ? null : args,
+    );
+
+    int actualizados = 0;
+    await db.transaction((txn) async {
+      for (final p in productos) {
+        final double precioActual = (p['precio'] as num?)?.toDouble() ?? 0.0;
+        final double rappiActual = (p['precioRappi'] as num?)?.toDouble() ?? 0.0;
+
+        double nuevoPrecio = precioActual * factor;
+        double nuevoRappi = rappiActual * factor;
+
+        if (redondear) {
+          nuevoPrecio = nuevoPrecio.roundToDouble();
+          nuevoRappi = nuevoRappi.roundToDouble();
+        } else {
+          nuevoPrecio = double.parse(nuevoPrecio.toStringAsFixed(2));
+          nuevoRappi = double.parse(nuevoRappi.toStringAsFixed(2));
+        }
+
+        await txn.update(
+          'productos',
+          {
+            'precio': nuevoPrecio,
+            'precioRappi': nuevoRappi,
+            'updated_at': ahora,
+          },
+          where: 'id = ?',
+          whereArgs: [p['id']],
+        );
+        actualizados++;
+      }
+    });
+
+    return actualizados;
+  }
+
+  // ===================================================
+  // SECCIÓN 2: DEUDAS Y FINANZAS
+  // ===================================================
+
+  Future<void> actualizarDeuda(
+      String nombre,
+      String nuevosItemsJson,
+      double montoAdicional,
+      ) async {
+    final db = await _db;
+    final ahora = DateTime.now().toIso8601String();
+    final res = await db.query('deudores', where: 'nombre = ?', whereArgs: [nombre]);
+
+    if (res.isNotEmpty) {
+      final actual = res.first;
+      final double totalActual = (actual['total_deuda'] as num?)?.toDouble() ?? 0.0;
+      final String itemsActuales = (actual['items'] ?? '[]').toString();
+
+      final List<ItemVenta> listaFinal = ItemVenta.listaDesdeString(itemsActuales);
+      listaFinal.addAll(ItemVenta.listaDesdeString(nuevosItemsJson));
+
+      final String jsonFinal = ItemVenta.listaAJson(listaFinal);
+      final double totalFinal = totalActual + montoAdicional;
+
+      await db.update(
+        'deudores',
+        {
+          'items': jsonFinal,
+          'total_deuda': totalFinal,
+          'fecha_ultimo_fiado': ahora,
+          'updated_at': ahora,
+        },
+        where: 'id = ?',
+        whereArgs: [actual['id']],
+      );
+    } else {
+      await db.insert('deudores', {
+        'uuid': _uuid.v4(),
+        'nombre': nombre,
+        'items': nuevosItemsJson,
+        'total_deuda': montoAdicional,
+        'fecha_ultimo_fiado': ahora,
+        'updated_at': ahora,
+      });
+    }
+  }
+
+  Future<ListaFilasDB> obtenerDeudores(String query) async {
+    final db = await _db;
+    if (query.trim().isEmpty) {
+      return await db.query('deudores', orderBy: 'fecha_ultimo_fiado DESC');
+    } else {
+      return await db.query(
+        'deudores',
+        where: 'nombre LIKE ?',
+        whereArgs: ['%${query.trim()}%'],
+        orderBy: 'fecha_ultimo_fiado DESC',
+      );
+    }
+  }
+
+  Future<void> abonar(int id, double montoAbono) async {
+    final db = await _db;
+    final res = await db.query('deudores', where: 'id = ?', whereArgs: [id]);
+    if (res.isNotEmpty) {
+      final double deuda = (res.first['total_deuda'] as num?)?.toDouble() ?? 0.0;
+      final double restante = deuda - montoAbono;
+      if (restante <= 0.009) {
+        await db.delete('deudores', where: 'id = ?', whereArgs: [id]);
+      } else {
+        await db.update(
+          'deudores',
+          {
+            'total_deuda': restante,
+            'updated_at': DateTime.now().toIso8601String(),
+          },
+          where: 'id = ?',
+          whereArgs: [id],
+        );
+      }
+    }
+  }
+
+  // ===================================================
+  // SECCIÓN 3: HISTORIAL, VENTAS, DEVOLUCIONES Y REPORTES
+  // ===================================================
+
+  Future<void> depurarBaseDatos() async {
+    final db = await _db;
+    final now = DateTime.now();
+    final limiteSieteDias = now.subtract(const Duration(days: 7)).toIso8601String();
+    final hace2Anios = now.subtract(const Duration(days: 730)).toIso8601String();
+    final hace5Anios = now.subtract(const Duration(days: 1825)).toIso8601String();
+
+    await db.delete('recientes', where: 'fecha_agregado < ?', whereArgs: [limiteSieteDias]);
+    await db.update(
+      'ventas_historial',
+      {'es_activo': 0, 'updated_at': now.toIso8601String()},
+      where: 'fecha < ? AND es_activo = 1',
+      whereArgs: [hace2Anios],
+    );
+    await db.delete('ventas_historial', where: 'fecha < ?', whereArgs: [hace5Anios]);
+  }
+
+  Future<void> depurarBaseDatosSeguro() async {
+    try {
+      await depurarBaseDatos();
+    } catch (e) {
+      debugPrint('[DBHelper] Error al depurar: $e');
+    }
+  }
+
+  Future<int> registrarVenta({
+    required String fecha,
+    required double total,
+    required double costoTotal,
+    required String items,
+    double recibido = 0,
+    double cambio = 0,
+    String cliente = 'Cliente General',
+    String metodoPago = 'Efectivo',
+  }) async {
+    final db = await _db;
+    final ahora = DateTime.now().toIso8601String();
+
+    return await db.transaction((txn) async {
+      final int idGenerado = await txn.insert('ventas_historial', {
+        'uuid': _uuid.v4(),
+        'fecha': fecha,
+        'total': total,
+        'costo_total': costoTotal,
+        'items': items,
+        'cliente': cliente,
+        'metodo_pago': metodoPago,
+        'recibido': recibido,
+        'cambio': cambio,
+        'es_activo': 1,
+        'updated_at': ahora,
+      });
+
+      try {
+        final List<dynamic> itemsList = jsonDecode(items);
+        for (final it in itemsList) {
+          if (it is Map) {
+            await txn.insert('ventas_detalles', {
+              'venta_id': idGenerado,
+              'sku': it['sku'] ?? 'N/A',
+              'descripcion': it['descripcion'] ?? 'Sin descripción',
+              'cantidad': (it['cantidad'] as num?)?.toDouble() ?? 1.0,
+              'precio': (it['precio'] as num?)?.toDouble() ?? 0.0,
+              'costo': (it['costo'] as num?)?.toDouble() ?? 0.0,
+              'estado': 'activo',
+            });
+          }
+        }
+      } catch (e) {
+        debugPrint('[DBHelper] Error al guardar detalles: $e');
+      }
+
+      await txn.update(
+        'ventas_historial',
+        {'folio_venta': idGenerado.toString()},
+        where: 'id = ?',
+        whereArgs: [idGenerado],
+      );
+
+      return idGenerado;
+    });
+  }
+
+  Future<void> actualizarVentaModificada({
+    required int id,
+    required double nuevoTotal,
+    required double nuevoCosto,
+    required String nuevosItems,
+    ListaFilasDB? itemsDevueltos,
+    String? nuevoFolioDisplay,
+  }) async {
+    final db = await _db;
+    final ahora = DateTime.now().toIso8601String();
+    final String baseFolio = (nuevoFolioDisplay != null && nuevoFolioDisplay.isNotEmpty)
+        ? nuevoFolioDisplay
+        : id.toString();
+    final String folioFinal = baseFolio.endsWith('M') ? baseFolio : '${baseFolio}M';
+
+    await db.transaction((txn) async {
+      await txn.update(
+        'ventas_historial',
+        {
+          'total': nuevoTotal,
+          'costo_total': nuevoCosto,
+          'items': nuevosItems,
+          'folio_venta': folioFinal,
+          'updated_at': ahora,
+        },
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+
+      if (itemsDevueltos != null) {
+        for (final item in itemsDevueltos) {
+          final res = await txn.query(
+            'ventas_detalles',
+            where: 'venta_id = ? AND sku = ? AND estado = ?',
+            whereArgs: [id, item['sku'], 'activo'],
+          );
+
+          double cantidadPorDevolver = (item['cantidad'] as num?)?.toDouble() ?? 0.0;
+
+          for (final row in res) {
+            if (cantidadPorDevolver <= 0.0001) break;
+
+            final int idRenglon = row['id'] as int;
+            final double cantidadEnRenglon = (row['cantidad'] as num?)?.toDouble() ?? 0.0;
+
+            if (cantidadEnRenglon <= cantidadPorDevolver + 0.0001) {
+              await txn.update(
+                'ventas_detalles',
+                {'estado': 'devuelto'},
+                where: 'id = ?',
+                whereArgs: [idRenglon],
+              );
+              cantidadPorDevolver -= cantidadEnRenglon;
+            } else {
+              final double cantidadRestante = double.parse(
+                (cantidadEnRenglon - cantidadPorDevolver).toStringAsFixed(4),
+              );
+              await txn.update(
+                'ventas_detalles',
+                {'cantidad': cantidadRestante},
+                where: 'id = ?',
+                whereArgs: [idRenglon],
+              );
+
+              await txn.insert('ventas_detalles', {
+                'venta_id': id,
+                'sku': row['sku'],
+                'descripcion': row['descripcion'],
+                'cantidad': cantidadPorDevolver,
+                'precio': row['precio'],
+                'costo': row['costo'],
+                'estado': 'devuelto',
+              });
+
+              cantidadPorDevolver = 0;
+            }
+          }
+        }
+      }
+    });
+  }
+
+  Future<ListaFilasDB> obtenerDetallesVenta(int ventaId) async {
+    final db = await _db;
+    return await db.query('ventas_detalles', where: 'venta_id = ?', whereArgs: [ventaId]);
+  }
+
+  Future<ListaFilasDB> buscarVentas(String query, bool soloActivos) async {
+    final db = await _db;
+    String whereClause = soloActivos ? 'es_activo = 1' : 'es_activo = 0';
+    if (query.trim().isNotEmpty) {
+      final patron = '%${query.trim()}%';
+      whereClause += ' AND (folio_venta LIKE ? OR cliente LIKE ?)';
+      return await db.query(
+        'ventas_historial',
+        where: whereClause,
+        whereArgs: [patron, patron],
+        orderBy: 'fecha DESC',
+      );
+    } else {
+      return await db.query('ventas_historial', where: whereClause, orderBy: 'fecha DESC');
+    }
+  }
+
+  Future<ListaFilasDB> obtenerVentasDelDia(String fechaHoyYMD) async {
+    final db = await _db;
+    return await db.query(
+      'ventas_historial',
+      where: 'fecha LIKE ? AND es_activo = 1',
+      whereArgs: ['$fechaHoyYMD%'],
+      orderBy: 'fecha DESC',
+    );
+  }
+
+  Future<int> asignarNombreCliente(int id, String nuevoNombre) async {
+    final db = await _db;
+    return await db.update(
+      'ventas_historial',
+      {
+        'cliente': nuevoNombre,
+        'updated_at': DateTime.now().toIso8601String(),
+      },
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  Future<FilaDB?> buscarVentaPorFolio(dynamic folio) async {
+    final db = await _db;
+    final res = await db.query(
+      'ventas_historial',
+      where: 'folio_venta = ?',
+      whereArgs: [folio.toString()],
+      limit: 1,
+    );
+    return res.isNotEmpty ? res.first : null;
+  }
+
+  Future<ListaFilasDB> obtenerVentasPorMes(int mes, int anio) async {
+    final db = await _db;
+    final String mesStr = mes.toString().padLeft(2, '0');
+    final String fechaLike = '$anio-$mesStr-%';
+
+    return await db.rawQuery('''
+      SELECT 
+        substr(fecha, 1, 10) as fecha_dia, 
+        COALESCE(SUM(total), 0.0) as total_venta,
+        COALESCE(SUM(costo_total), 0.0) as total_costo
+      FROM ventas_historial
+      WHERE fecha LIKE ? AND es_activo = 1
+      GROUP BY substr(fecha, 1, 10)
+    ''', [fechaLike]);
+  }
+
+  Future<ListaFilasDB> obtenerVentasRango(String fechaInicio, String fechaFin) async {
+    final db = await _db;
+    return await db.rawQuery('''
+      SELECT 
+        substr(fecha, 1, 10) as fecha_dia, 
+        COALESCE(SUM(total), 0.0) as total_venta,
+        COALESCE(SUM(costo_total), 0.0) as total_costo
+      FROM ventas_historial
+      WHERE substr(fecha, 1, 10) BETWEEN ? AND ? AND es_activo = 1
+      GROUP BY substr(fecha, 1, 10)
+    ''', [fechaInicio, fechaFin]);
+  }
+
+  Future<FilaDB> obtenerResumenCorteFinanciero(String prefijoFecha) async {
+    final db = await _db;
+    final res = await db.rawQuery('''
+      SELECT 
+        COALESCE(SUM(total), 0.0) AS ingreso_bruto,
+        COALESCE(SUM(costo_total), 0.0) AS capital_recuperacion,
+        COALESCE(SUM(total - costo_total), 0.0) AS utilidad_neta
+      FROM ventas_historial
+      WHERE es_activo = 1 AND fecha LIKE ?
+    ''', ['$prefijoFecha%']);
+    return res.first;
+  }
+
+  Future<FilaDB?> obtenerProductoMasVendidoMes(int mes, int anio) async {
+    final db = await _db;
+    final String mesStr = mes.toString().padLeft(2, '0');
+    final String fechaLike = '$anio-$mesStr-%';
+
+    final res = await db.rawQuery('''
+      SELECT 
+        d.sku,
+        d.descripcion,
+        SUM(d.cantidad) AS total_unidades,
+        SUM(d.cantidad * d.precio) AS total_ingresos
+      FROM ventas_detalles d
+      INNER JOIN ventas_historial v ON v.id = d.venta_id
+      WHERE v.fecha LIKE ? AND v.es_activo = 1 AND d.estado = 'activo'
+      GROUP BY d.sku, d.descripcion
+      ORDER BY total_unidades DESC
+      LIMIT 1
+    ''', [fechaLike]);
+
+    if (res.isNotEmpty && res.first['descripcion'] != null) {
+      return res.first;
+    }
+    return null;
+  }
+
+  Future<ListaFilasDB> obtenerVentasPorDia(String fechaYmd) async {
+    final db = await _db;
+    return await db.query(
+      'ventas_historial',
+      where: 'fecha LIKE ?',
+      whereArgs: ['$fechaYmd%'],
+      orderBy: 'fecha DESC',
+    );
+  }
+
+  // ===================================================
+  // SECCIÓN 4: ARTÍCULOS RECIENTES
+  // ===================================================
+
+  Future<void> agregarReciente(String codigo) async {
+    final db = await _db;
+    final fecha = DateTime.now().toIso8601String();
+    await db.insert(
+      'recientes',
+      {'codigo': codigo, 'fecha_agregado': fecha},
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+    _limpiarAntiguos().catchError((e) => debugPrint('[DBHelper] Limpieza: $e'));
+  }
+
+  Future<List<Producto>> obtenerProductosRecientesCompletos() async {
+    final codigos = await obtenerCodigosRecientes();
+    if (codigos.isEmpty) return [];
+
+    final resultados = await Future.wait(
+      codigos.map((codigo) => getProductoPorCodigo(codigo)),
+    );
+
+    final List<Producto> productos = [];
+    for (final mapa in resultados) {
+      if (mapa != null) {
+        productos.add(Producto.desdeMapa(mapa));
+      }
+    }
+    return productos;
+  }
+
+  Future<List<String>> obtenerCodigosRecientes() async {
+    final db = await _db;
+    await _limpiarAntiguos();
+    final res = await db.query('recientes', orderBy: 'fecha_agregado DESC');
+    return res.map((e) => e['codigo'] as String).toList();
+  }
+
+  Future<void> _limpiarAntiguos() async {
+    final db = await _db;
+    final limite = DateTime.now().subtract(const Duration(days: 7)).toIso8601String();
+    await db.delete('recientes', where: 'fecha_agregado < ?', whereArgs: [limite]);
   }
 }

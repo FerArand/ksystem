@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'dart:convert';
-import 'databases/history_db.dart';
+import 'db_helper.dart';
 import 'db_helper.dart';
 import 'constants/colores.dart';
 import 'Utils/impresion_ticket.dart';
@@ -56,7 +56,7 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
     String finStr = DateFormat('yyyy-MM-dd').format(finCalendario);
 
     // 2. OBTENER RESUMEN POR RANGO
-    final ventas = await HistoryDB.instance.obtenerVentasRango(inicioStr, finStr);
+    final ventas = await DBHelper.instance.obtenerVentasRango(inicioStr, finStr);
 
     Map<String, Map<String, double>> temp = {};
     double maxVenta = 0;
@@ -207,7 +207,7 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
       for (int i = 0; i < itemsOriginales.length; i++) {
         final item = itemsOriginales[i];
         int devueltos = cantidadesDevolver[i]!;
-        int quedan = item.cantidad - devueltos;
+        double quedan = item.cantidad - devueltos;
 
         if (devueltos > 0) {
           // Devolver al stock
@@ -241,7 +241,7 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
       // Mapear devueltos para el registro detallado
       List<Map<String, dynamic>> devueltosDetalle = itemsDevueltosEfectivos.map((e) => e.toJson()).toList();
 
-      await HistoryDB.instance.actualizarVentaModificada(
+      await DBHelper.instance.actualizarVentaModificada(
         id: ticketData['id'],
         nuevoTotal: nuevoTotal,
         nuevoCosto: nuevoCosto,
@@ -290,7 +290,7 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
       List<modelo.ItemVenta> itemsDevueltosReal = itemsDevueltos ?? [];
       
       if (itemsDevueltos == null) {
-        final detalles = await HistoryDB.instance.obtenerDetallesVenta(ticketData['id']);
+        final detalles = await DBHelper.instance.obtenerDetallesVenta(ticketData['id']);
         if (detalles.isNotEmpty) {
           for (var d in detalles) {
             final item = modelo.ItemVenta.fromJson(d);
@@ -722,7 +722,7 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
 
   void _abrirDetalleDia(DateTime fecha, {int initialTab = 0, String? highlightFolio}) async {
     String fechaYmd = DateFormat('yyyy-MM-dd').format(fecha);
-    List<Map<String, dynamic>> tickets = await HistoryDB.instance.obtenerVentasPorDia(fechaYmd);
+    List<Map<String, dynamic>> tickets = await DBHelper.instance.obtenerVentasPorDia(fechaYmd);
 
     if (!mounted) return;
 
@@ -836,7 +836,7 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
     String cleanQuery = query.trim().toUpperCase();
     if (cleanQuery.isEmpty) return;
 
-    final venta = await HistoryDB.instance.buscarVentaPorFolio(cleanQuery);
+    final venta = await DBHelper.instance.buscarVentaPorFolio(cleanQuery);
 
     if (!mounted) return;
 
@@ -898,7 +898,7 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
         final hora = t['fecha'].toString().split(' ')[1].substring(0, 5);
 
         return FutureBuilder<List<Map<String, dynamic>>>(
-          future: HistoryDB.instance.obtenerDetallesVenta(t['id']),
+          future: DBHelper.instance.obtenerDetallesVenta(t['id']),
           builder: (context, snapshot) {
             List<Widget> itemWidgets = [];
             
@@ -1136,7 +1136,7 @@ class _CalendarioVentasState extends State<CalendarioVentas> {
       }
 
       // Cargar detalles reales para incluir devoluciones con etiqueta
-      final detalles = await HistoryDB.instance.obtenerDetallesVenta(t['id']);
+      final detalles = await DBHelper.instance.obtenerDetallesVenta(t['id']);
       
       if (detalles.isNotEmpty) {
         for (var d in detalles) {

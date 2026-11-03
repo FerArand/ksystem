@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:ksystem/widgets/product_card.dart';
 import 'db_helper.dart';
-import 'databases/recent_db.dart';
+import 'db_helper.dart';
 import 'models/producto.dart';
 import 'constants/colores.dart';
 import 'widgets/product_form_dialog.dart'; // <--- ÚNICO CAMBIO: Importar el formulario
@@ -31,7 +31,7 @@ class _NuevoIngresoState extends State<NuevoIngreso> {
 
   // --- CARGA DE DATOS (Recientes) ---
   Future<void> _cargarMemoriaReciente() async {
-    final recuperados = await RecentDB.instance.obtenerProductosRecientesCompletos();
+    final recuperados = await DBHelper.instance.obtenerProductosRecientesCompletos();
 
     if (mounted) {
       setState(() {
@@ -52,7 +52,7 @@ class _NuevoIngresoState extends State<NuevoIngreso> {
   }
 
   Future<void> _registrarEnMemoria(String codigo) async {
-    await RecentDB.instance.agregarReciente(codigo);
+    await DBHelper.instance.agregarReciente(codigo);
   }
 
   // --- ESCÁNER ---

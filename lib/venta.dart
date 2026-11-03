@@ -8,8 +8,8 @@ import 'models/producto.dart';
 import 'constants/colores.dart';
 import 'Utils/impresion_ticket.dart';
 import 'Utils/formatters.dart';
-import 'databases/history_db.dart';
-import 'databases/debt_db.dart';
+import 'db_helper.dart';
+import 'db_helper.dart';
 import 'widgets/product_form_dialog.dart';
 import 'factura_form.dart';
 import 'Utils/numeric_formatter.dart';
@@ -246,7 +246,7 @@ class _VentaState extends State<Venta> {
 
     // 2. UN SOLO REGISTRO (Aquí es donde estaba el error)
     // Ya no llamamos a DBHelper.insertVenta, vamos directo a HistoryDB
-    int ventaId = await HistoryDB.instance.registrarVenta(
+    int ventaId = await DBHelper.instance.registrarVenta(
         fecha: fecha,
         total: _total,
         costoTotal: costoTotalVenta,
@@ -393,7 +393,7 @@ class _VentaState extends State<Venta> {
                   if (nombre.isEmpty) return;
 
                   // Usamos el JSON en lugar del string con pipes
-                  await DebtDB.instance.actualizarDeuda(nombre, itemsResumenJson, _total);
+                  await DBHelper.instance.actualizarDeuda(nombre, itemsResumenJson, _total);
 
                   // REGISTRO DE COSTO EN EL CALENDARIO PARA CONTABILIDAD
                   double costoTotalVenta = 0.0;
@@ -405,7 +405,7 @@ class _VentaState extends State<Venta> {
                   
                   // Registramos una venta de "Fiado" con 0 liquidez pero con el costo total
                   // Esto permite que el calendario reste el costo de la ganancia del día
-                  int ventaId = await HistoryDB.instance.registrarVenta(
+                  int ventaId = await DBHelper.instance.registrarVenta(
                     fecha: fecha,
                     total: 0, // No hay ingreso de dinero aún
                     costoTotal: costoTotalVenta,

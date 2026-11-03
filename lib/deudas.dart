@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'databases/debt_db.dart';
+import 'db_helper.dart';
 import 'models/item_venta.dart';
 
-import 'databases/history_db.dart';
+import 'db_helper.dart';
 import 'Utils/impresion_ticket.dart';
 import 'Utils/formatters.dart';
 import 'Utils/numeric_formatter.dart';
@@ -30,7 +30,7 @@ class _DeudasState extends State<Deudas> {
 
   Future<void> _cargarDeudores() async {
     setState(() => _cargando = true);
-    final datos = await DebtDB.instance.obtenerDeudores(_query);
+    final datos = await DBHelper.instance.obtenerDeudores(_query);
     setState(() {
       _deudores = datos;
       _cargando = false;
@@ -254,7 +254,7 @@ class _DeudasState extends State<Deudas> {
                           final recibidoTotal = recibido;
 
                           // 1. Registrar abono en la base de datos de deudas
-                          await DebtDB.instance.abonar(deudor['id'], abonoAplicado);
+                          await DBHelper.instance.abonar(deudor['id'], abonoAplicado);
 
                           // 2. Registrar el ingreso en el calendario (HistoryDB)
                           final fecha = DateFormat('yyyy-MM-dd HH:mm:ss').format(DateTime.now());
@@ -262,7 +262,7 @@ class _DeudasState extends State<Deudas> {
                           // RECUPERAR ITEMS PARA EL HISTORIAL (Para que la reimpresión sea exacta)
                           String itemsDeuda = deudor['items'] ?? '[]';
 
-                          await HistoryDB.instance.registrarVenta(
+                          await DBHelper.instance.registrarVenta(
                             fecha: fecha,
                             total: abonoAplicado,
                             costoTotal: 0, // El costo ya se registró cuando se pidió el fiado

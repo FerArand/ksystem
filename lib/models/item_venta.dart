@@ -1,76 +1,79 @@
 import 'dart:convert';
 
 class ItemVenta {
-  final String sku;
-  final String descripcion;
-  final int cantidad;
-  final double precio;
-  final double costo;
+  String sku;
+  String codigo;
+  String descripcion;
+  double cantidad; // Soporta enteros y decimales (metros/kilos)
+  double precio;
+  double costo;
+  bool esGranel;
 
-  const ItemVenta({
+  ItemVenta({
     required this.sku,
+    this.codigo = '',
     required this.descripcion,
-    required this.cantidad,
+    required num cantidad,
     required this.precio,
     required this.costo,
-  });
+    this.esGranel = false,
+  }) : cantidad = cantidad.toDouble();
 
-  // De objeto Dart → Map para guardar en JSON
-  Map<String, dynamic> toJson() => {
-    'sku': sku,
-    'descripcion': descripcion,
-    'cantidad': cantidad,
-    'precio': precio,
-    'costo': costo,
-  };
+  double get subtotal => cantidad * precio;
+  double get costoProporcional => cantidad * costo;
 
-  // De Map (parseado del JSON) → objeto Dart
-  factory ItemVenta.fromJson(Map<String, dynamic> json) => ItemVenta(
-    sku:         json['sku']         ?? '',
-    descripcion: json['descripcion'] ?? '',
-    cantidad:    json['cantidad']    ?? 1,
-    precio:      (json['precio']     ?? 0.0).toDouble(),
-    costo:       (json['costo']      ?? 0.0).toDouble(),
-  );
+  factory ItemVenta.desdeMapa(Map<String, dynamic> map) {
+    return ItemVenta(
+      sku: (map['sku'] ?? 'N/A').toString(),
+      codigo: (map['codigo'] ?? '').toString(),
+      descripcion: (map['descripcion'] ?? 'Sin descripción').toString(),
+      cantidad: (map['cantidad'] as num?)?.toDouble() ?? 1.0,
+      precio: (map['precio'] as num?)?.toDouble() ?? 0.0,
+      costo: (map['costo'] as num?)?.toDouble() ?? 0.0,
+      esGranel: map['es_granel'] == 1 || map['es_granel'] == true,
+    );
+  }
 
-  // Convierte una lista de items a string JSON para guardar en BD
-  static String listaAJson(List<ItemVenta> items) =>
-      jsonEncode(items.map((e) => e.toJson()).toList());
+  factory ItemVenta.fromJson(Map<String, dynamic> json) => ItemVenta.desdeMapa(json);
+  factory ItemVenta.fromMap(Map<String, dynamic> map) => ItemVenta.desdeMapa(map);
 
-  // Parsea el string JSON de la BD a lista de objetos
-  // Maneja tanto el formato nuevo (JSON) como el viejo (pipes)
-  // para compatibilidad durante la transición
-  static List<ItemVenta> listaDesdeString(String raw) {
-    if (raw.isEmpty) return [];
+  Map<String, dynamic> aMapa() {
+    return {
+      'sku': sku,
+      if (codigo.isNotEmpty) 'codigo': codigo,
+      'descripcion': descripcion,
+      'cantidad': (!esGranel && cantidad == cantidad.roundToDouble())
+          ? cantidad.toInt()
+          : double.parse(cantidad.toStringAsFixed(3)),
+      'precio': precio,
+      'costo': costo,
+      'es_granel': esGranel ? 1 : 0,
+    };
+  }
 
-    // Detectar si es JSON nuevo o pipe-separated viejo
-    if (raw.trimLeft().startsWith('[')) {
-      try {
-        final lista = jsonDecode(raw) as List;
-        return lista.map((e) => ItemVenta.fromJson(e)).toList();
-      } catch (_) {
-        return [];
+  // Restaurado para compatibilidad con calendario_ventas.dart y venta.dart
+  Map<String, dynamic> toJson() => aMapa();
+  Map<String, dynamic> toMap() => aMapa();
+
+  static List<ItemVenta> listaDesdeString(String rawJson) {
+    if (rawJson.trim().isEmpty) return [];
+    try {
+      final List<dynamic> decoded = jsonDecode(rawJson);
+      final List<ItemVenta> resultado = [];
+      for (final item in decoded) {
+        if (item is Map) {
+          resultado.add(
+            ItemVenta.desdeMapa(Map<String, dynamic>.from(item)),
+          );
+        }
       }
+      return resultado;
+    } catch (_) {
+      return [];
     }
+  }
 
-    // Fallback: parsear formato viejo con pipes
-    // Esto cubre filas que no migraron correctamente
-    return raw.split('|')
-        .where((s) => s.isNotEmpty)
-        .map((s) {
-      final skuMatch    = RegExp(r'\[SKU:(.*?)\]').firstMatch(s);
-      final precioMatch = RegExp(r'\[P:(.*?)\]').firstMatch(s);
-      final costoMatch  = RegExp(r'\[C:(.*?)\]').firstMatch(s);
-      final cantMatch   = RegExp(r'^(\d+)x').firstMatch(s.trim());
-      final descripcion = s.replaceAll(RegExp(r'\[.*?\]'), '')
-          .replaceAll(RegExp(r'^\d+x'), '').trim();
-      return ItemVenta(
-        sku:         skuMatch?.group(1)    ?? '',
-        descripcion: descripcion,
-        cantidad:    int.tryParse(cantMatch?.group(1) ?? '1') ?? 1,
-        precio:      double.tryParse(precioMatch?.group(1) ?? '0') ?? 0,
-        costo:       double.tryParse(costoMatch?.group(1)  ?? '0') ?? 0,
-      );
-    }).toList();
+  static String listaAJson(List<ItemVenta> items) {
+    return jsonEncode(items.map((e) => e.aMapa()).toList());
   }
 }
