@@ -106,6 +106,17 @@ class AppDatabase {
       await _agregarColumnaSegura(db, 'pedidos', 'uuid', 'TEXT');
       await _agregarColumnaSegura(db, 'pedidos', 'updated_at', 'TEXT');
 
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS factureros (
+          rfc TEXT PRIMARY KEY,
+          razon_social TEXT NOT NULL,
+          codigo_postal TEXT NOT NULL,
+          regimen_fiscal TEXT NOT NULL,
+          correo TEXT NOT NULL,
+          uso_cfdi TEXT NOT NULL
+        )
+      ''');
+      
       await _inicializarUuidRegistrosExistentes(db);
     }
   }

@@ -25,30 +25,23 @@ class _ProductosState extends State<Productos> {
     _cargarProductos();
   }
 
+// En lib/productos.dart, reemplaza _cargarProductos y _modificarStock dentro de _ProductosState por:
   Future<void> _cargarProductos() async {
-    final db = await DBHelper.instance.database;
-    List<Map<String, dynamic>> maps;
-
-    if (_query.isEmpty) {
-      maps = await db.query('productos', orderBy: 'descripcion ASC', limit: 100);
-    } else {
-      maps = await db.query(
-          'productos',
-          where: 'descripcion LIKE ? OR codigo LIKE ? OR sku LIKE ? OR marca LIKE ? OR ubicacion LIKE ?',
-          whereArgs: ['%$_query%', '%$_query%', '%$_query%', '%$_query%', '%$_query%']
-      );
-    }
-
+    final lista = await DBHelper.instance.buscarProductosMulticriterio(
+      _query,
+      limite: 100,
+    );
+    if (!mounted) return;
     setState(() {
-      _listaProductos = maps.map((e) => Producto.desdeMapa(e)).toList();
+      _listaProductos = lista;
       _cargando = false;
     });
   }
 
-  Future<void> _modificarStock(Producto p, int cantidad) async {
+  Future<void> _modificarStock(Producto p, num cantidad) async {
     await DBHelper.instance.updateStock(p.codigo, cantidad);
     setState(() {
-      p.stock += cantidad;
+      p.stock = double.parse((p.stock + cantidad.toDouble()).toStringAsFixed(4));
     });
   }
 

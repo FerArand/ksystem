@@ -29,11 +29,14 @@ class ProductCard extends StatelessWidget {
         padding: const EdgeInsets.all(12.0),
         child: Row(
           children: [
-            // Círculo con Inicial
             CircleAvatar(
-              backgroundColor: alertStock ? Colors.red[100] : Colores.azulPrincipal.withOpacity(0.1),
+              backgroundColor: alertStock
+                  ? Colors.red[100]
+                  : Colores.azulPrincipal.withValues(alpha: 0.1),
               child: Text(
-                producto.descripcion.isNotEmpty ? producto.descripcion[0].toUpperCase() : '?',
+                producto.descripcion.isNotEmpty
+                    ? producto.descripcion[0].toUpperCase()
+                    : '?',
                 style: TextStyle(
                   color: alertStock ? Colors.red : Colores.azulPrincipal,
                   fontWeight: FontWeight.bold,
@@ -41,8 +44,6 @@ class ProductCard extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 15),
-
-            // Información Central
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -58,16 +59,20 @@ class ProductCard extends StatelessWidget {
                     spacing: 8,
                     runSpacing: 4,
                     children: [
-                      _infoTag("SKU: ${producto.sku}", Colors.blueGrey),
-                      _infoTag("Venta: ${Formatters.formatearMoneda(producto.precio)}", Colors.green),
-                      if (producto.ubicacion.isNotEmpty) _infoTag("Ubicación: ${producto.ubicacion}", Colors.orange),
+                      _infoTag('SKU: ${producto.sku}', Colors.blueGrey),
+                      _infoTag(
+                        'Venta: ${Formatters.formatearMoneda(producto.precio)}',
+                        Colors.green,
+                      ),
+                      if (producto.ubicacion.isNotEmpty)
+                        _infoTag('Ubicación: ${producto.ubicacion}', Colors.orange),
+                      if (producto.esGranel)
+                        _infoTag('VENTA A GRANEL', Colors.deepPurple),
                     ],
                   ),
                 ],
               ),
             ),
-
-            // Control de Stock
             if (onStockChange != null)
               Container(
                 decoration: BoxDecoration(
@@ -84,7 +89,7 @@ class ProductCard extends StatelessWidget {
                       padding: EdgeInsets.zero,
                     ),
                     Text(
-                      "${producto.stock}",
+                      producto.stockFormateado,
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 18,
@@ -102,16 +107,13 @@ class ProductCard extends StatelessWidget {
               )
             else
               Text(
-                "Stock: ${producto.stock}",
+                'Stock: ${producto.stockFormateado}',
                 style: TextStyle(
                   fontWeight: FontWeight.bold,
                   color: alertStock ? Colors.red : Colors.black,
                 ),
               ),
-
             const SizedBox(width: 10),
-
-            // Acciones
             if (onEdit != null)
               IconButton(
                 icon: const Icon(Icons.edit, color: Colors.orange),
@@ -132,7 +134,7 @@ class ProductCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(4),
       ),
       child: Text(
