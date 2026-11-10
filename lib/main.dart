@@ -1,36 +1,25 @@
-import 'package:flutter/material.dart';
-import 'package:intl/date_symbol_data_local.dart';
-import 'package:sqflite_common_ffi/sqflite_ffi.dart';
-import 'package:window_manager/window_manager.dart';
-import 'databases/app_database.dart';
-import 'db_helper.dart';
 import 'inicio.dart';
+import 'dart:async';
+import 'package:flutter/material.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+import 'package:ksystem/db_helper.dart';
+import 'package:ksystem/databases/sync_service.dart';
+import 'package:ksystem/firebase_options.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await initializeDateFormatting('es_MX', null);
-
   sqfliteFfiInit();
   databaseFactory = databaseFactoryFfi;
 
-  try {
-    await windowManager.ensureInitialized();
-    const WindowOptions windowOptions = WindowOptions(
-      minimumSize: Size(1000, 750),
-      center: true,
-      title: 'KTOOLS - Sistema Punto de Venta e Inventario (Ksystem)',
-    );
-    windowManager.waitUntilReadyToShow(windowOptions, () async {
-      await windowManager.show();
-      await windowManager.focus();
-    });
-  } catch (e) {
-    debugPrint('Error inicializando windowManager en Windows: $e');
-  }
-
-  await AppDatabase.instance.database;
   await DBHelper.instance.depurarBaseDatosSeguro();
-  runApp(const MyApp());
+
+  unawaited(
+    SyncService.instance.inicializar(
+      options: DefaultFirebaseOptions.currentPlatform,
+    ),
+  );
+
+  runApp(const MyApp()); // Deja aquí el nombre exacto de tu clase principal
 }
 
 class MyApp extends StatelessWidget {

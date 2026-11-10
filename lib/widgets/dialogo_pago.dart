@@ -13,6 +13,9 @@ class ResultadoPago {
     required this.recibido,
     required this.cambio,
   });
+
+  // Alias de compatibilidad
+  String get descripcionTicket => metodoPago;
 }
 
 class DialogoPago extends StatefulWidget {
@@ -26,12 +29,12 @@ class DialogoPago extends StatefulWidget {
   }) : super(key: key);
 
   @override
-  State<DialogoPago> createState() => _DialogoPagoState();
+  State< DialogoPago > createState() => _DialogoPagoState();
 }
 
-class _DialogoPagoState extends State<DialogoPago> {
+class _DialogoPagoState extends State< DialogoPago > {
   bool _modoCombinado = false;
-  final List<String> _seleccionados = [];
+  final List< String > _seleccionados = [];
 
   late TextEditingController _efectivoRecibidoCtrl;
   final TextEditingController _montoTarjetaCtrl = TextEditingController();
@@ -244,7 +247,11 @@ class _DialogoPagoState extends State<DialogoPago> {
                   children: [
                     const Text(
                       'TOTAL A COBRAR',
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.blueGrey),
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.blueGrey,
+                      ),
                     ),
                     Text(
                       Formatters.formatearMoneda(widget.totalCobrar),
@@ -343,7 +350,8 @@ class _DialogoPagoState extends State<DialogoPago> {
                   inputFormatters: [ThousandsSeparatorInputFormatter()],
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   decoration: InputDecoration(
-                    labelText: 'Monto a cobrar en ${_seleccionados.firstWhere((m) => m.contains("Tarjeta"))}',
+                    labelText:
+                    'Monto a cobrar en ${_seleccionados.firstWhere((m) => m.contains("Tarjeta"))}',
                     prefixText: '\$',
                     border: const OutlineInputBorder(),
                   ),
@@ -363,7 +371,10 @@ class _DialogoPagoState extends State<DialogoPago> {
                   ),
                   child: Text(
                     'Restante en ${_seleccionados.lastWhere((m) => m != _seleccionados.firstWhere((x) => x.contains("Tarjeta")))}: ${Formatters.formatearMoneda(_diferenciaRestante)}',
-                    style: const TextStyle(fontWeight: FontWeight.bold, color: Colores.verde),
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Colores.verde,
+                    ),
                   ),
                 ),
                 if (_seleccionados.contains('Efectivo')) ...[
@@ -400,7 +411,8 @@ class _DialogoPagoState extends State<DialogoPago> {
                           style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
                         ),
                       ),
-                      if (!(_seleccionados.length == 1 && _seleccionados.first == 'Efectivo'))
+                      if (!(_seleccionados.length == 1 &&
+                          _seleccionados.first == 'Efectivo'))
                         TextButton(
                           onPressed: _cambiarTodoAEfectivo,
                           child: const Text('Cambiar todo a Efectivo'),

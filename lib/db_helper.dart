@@ -5,7 +5,11 @@ import 'package:uuid/uuid.dart';
 import 'package:ksystem/databases/app_database.dart';
 import 'package:ksystem/models/producto.dart';
 import 'package:ksystem/models/item_venta.dart';
+import "package:ksystem/databases/sync_service.dart";
+import "dart:async";
 
+typedef FilaDB = Map< String, dynamic >;
+typedef ListaFilasDB = List< FilaDB >;
 class DBHelper {
   static final DBHelper instance = DBHelper._init();
   static const Uuid _uuid = Uuid();
@@ -25,6 +29,7 @@ class DBHelper {
     data['uuid'] ??= _uuid.v4();
     data['updated_at'] = DateTime.now().toIso8601String();
     data['borrado'] ??= 0;
+    SyncService.instance.marcarCambiosPendientes();
     return await db.insert(
       'productos',
       data,
@@ -115,6 +120,7 @@ class DBHelper {
     final double nuevoStock = double.parse(
       (stockActual + cantidad.toDouble()).toStringAsFixed(4),
     );
+    SyncService.instance.marcarCambiosPendientes();
     return await db.update(
       'productos',
       <String, Object?>{
@@ -161,6 +167,7 @@ class DBHelper {
     final db = await _db;
     final data = Map<String, dynamic>.from(row);
     data['updated_at'] = DateTime.now().toIso8601String();
+    SyncService.instance.marcarCambiosPendientes();
     return await db.update(
       'productos',
       data,
@@ -308,6 +315,7 @@ class DBHelper {
         'updated_at': ahora,
       });
     }
+    SyncService.instance.marcarCambiosPendientes();
   }
 
   Future<List<Map<String, dynamic>>> obtenerDeudores(String query) async {
@@ -349,6 +357,7 @@ class DBHelper {
         );
       }
     }
+    SyncService.instance.marcarCambiosPendientes();
   }
 
   // ===================================================
@@ -394,7 +403,7 @@ class DBHelper {
     }
   }
 
-  Future<int> registrarVenta({
+  Future< int > registrarVenta({
     required String fecha,
     required double total,
     required double costoTotal,
@@ -407,8 +416,9 @@ class DBHelper {
     final db = await _db;
     final ahora = DateTime.now().toIso8601String();
 
-    return await db.transaction((Transaction txn) async {
-      final int idGenerado = await txn.insert('ventas_historial', <String, Object?>{
+    // 1. Guardamos el ID en una variable en lugar de hacer return directo
+    final int idGenerado = await db.transaction((txn) async {
+      final int nuevoId = await txn.insert('ventas_historial', {
         'uuid': _uuid.v4(),
         'fecha': fecha,
         'total': total,
@@ -423,11 +433,11 @@ class DBHelper {
       });
 
       try {
-        final List<dynamic> itemsList = jsonDecode(items);
-        for (final dynamic it in itemsList) {
+        final List< dynamic > itemsList = jsonDecode(items);
+        for (final it in itemsList) {
           if (it is Map) {
-            await txn.insert('ventas_detalles', <String, Object?>{
-              'venta_id': idGenerado,
+            await txn.insert('ventas_detalles', {
+              'venta_id': nuevoId,
               'sku': it['sku'] ?? 'N/A',
               'descripcion': it['descripcion'] ?? 'Sin descripción',
               'cantidad': (it['cantidad'] as num?)?.toDouble() ?? 1.0,
@@ -443,36 +453,41 @@ class DBHelper {
 
       await txn.update(
         'ventas_historial',
-        <String, Object?>{'folio_venta': idGenerado.toString()},
+        {'folio_venta': nuevoId.toString()},
         where: 'id = ?',
-        whereArgs: <Object?>[idGenerado],
+        whereArgs: [nuevoId],
       );
 
-      return idGenerado;
+      return nuevoId;
     });
+
+    // 2. Marcamos que hay cambios y disparamos el respaldo (ya NO es código muerto)
+    SyncService.instance.marcarCambiosPendientes();
+    unawaited(SyncService.instance.sincronizarTodo());
+
+    // 3. Ahora sí retornamos el folio generado
+    return idGenerado;
   }
 
-  Future<void> actualizarVentaModificada({
+  Future< void > actualizarVentaModificada({
     required int id,
     required double nuevoTotal,
     required double nuevoCosto,
     required String nuevosItems,
-    List<Map<String, dynamic>>? itemsDevueltos,
+    ListaFilasDB? itemsDevueltos,
     String? nuevoFolioDisplay,
   }) async {
     final db = await _db;
     final ahora = DateTime.now().toIso8601String();
-    final String baseFolio =
-    (nuevoFolioDisplay != null && nuevoFolioDisplay.isNotEmpty)
+    final String baseFolio = (nuevoFolioDisplay != null && nuevoFolioDisplay.isNotEmpty)
         ? nuevoFolioDisplay
         : id.toString();
-    final String folioFinal =
-    baseFolio.endsWith('M') ? baseFolio : '${baseFolio}M';
+    final String folioFinal = baseFolio.endsWith('M') ? baseFolio : '${baseFolio}M';
 
-    await db.transaction((Transaction txn) async {
+    await db.transaction((txn) async {
       await txn.update(
         'ventas_historial',
-        <String, Object?>{
+        {
           'total': nuevoTotal,
           'costo_total': nuevoCosto,
           'items': nuevosItems,
@@ -480,33 +495,31 @@ class DBHelper {
           'updated_at': ahora,
         },
         where: 'id = ?',
-        whereArgs: <Object?>[id],
+        whereArgs: [id],
       );
 
       if (itemsDevueltos != null) {
-        for (final Map<String, dynamic> item in itemsDevueltos) {
+        for (final item in itemsDevueltos) {
           final res = await txn.query(
             'ventas_detalles',
             where: 'venta_id = ? AND sku = ? AND estado = ?',
-            whereArgs: <Object?>[id, item['sku'], 'activo'],
+            whereArgs: [id, item['sku'], 'activo'],
           );
 
-          double cantidadPorDevolver =
-              (item['cantidad'] as num?)?.toDouble() ?? 0.0;
+          double cantidadPorDevolver = (item['cantidad'] as num?)?.toDouble() ?? 0.0;
 
-          for (final Map<String, Object?> row in res) {
+          for (final row in res) {
             if (cantidadPorDevolver <= 0.0001) break;
 
             final int idRenglon = row['id'] as int;
-            final double cantidadEnRenglon =
-                (row['cantidad'] as num?)?.toDouble() ?? 0.0;
+            final double cantidadEnRenglon = (row['cantidad'] as num?)?.toDouble() ?? 0.0;
 
             if (cantidadEnRenglon <= cantidadPorDevolver + 0.0001) {
               await txn.update(
                 'ventas_detalles',
-                <String, Object?>{'estado': 'devuelto'},
+                {'estado': 'devuelto'},
                 where: 'id = ?',
-                whereArgs: <Object?>[idRenglon],
+                whereArgs: [idRenglon],
               );
               cantidadPorDevolver -= cantidadEnRenglon;
             } else {
@@ -515,12 +528,12 @@ class DBHelper {
               );
               await txn.update(
                 'ventas_detalles',
-                <String, Object?>{'cantidad': cantidadRestante},
+                {'cantidad': cantidadRestante},
                 where: 'id = ?',
-                whereArgs: <Object?>[idRenglon],
+                whereArgs: [idRenglon],
               );
 
-              await txn.insert('ventas_detalles', <String, Object?>{
+              await txn.insert('ventas_detalles', {
                 'venta_id': id,
                 'sku': row['sku'],
                 'descripcion': row['descripcion'],
@@ -536,6 +549,10 @@ class DBHelper {
         }
       }
     });
+
+    // Marcamos cambio pendiente y sincronizamos en segundo plano
+    SyncService.instance.marcarCambiosPendientes();
+    unawaited(SyncService.instance.sincronizarTodo());
   }
 
   Future<List<Map<String, dynamic>>> obtenerDetallesVenta(int ventaId) async {
